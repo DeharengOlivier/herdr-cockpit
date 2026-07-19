@@ -265,7 +265,10 @@ step "Shell"
 
 GUARD_LINE="[ -f \"$COCKPIT_DIR/shell/herdr-autostart.zsh\" ] && source \"$COCKPIT_DIR/shell/herdr-autostart.zsh\""
 
-if [ -f "$ZSHRC" ] && grep -Fq "herdr-autostart.zsh" "$ZSHRC"; then
+# On cherche la variable, pas le nom du fichier : un garde ecrit a la main
+# directement dans le .zshrc compte tout autant, et en ajouter un second ne
+# ferait que dupliquer la boucle.
+if [ -f "$ZSHRC" ] && grep -Fq "HERDR_AUTOSTART" "$ZSHRC"; then
   ok "garde HERDR_AUTOSTART deja present dans ~/.zshrc"
 elif confirm "Ajouter le garde HERDR_AUTOSTART a ~/.zshrc ? (sans lui, le space Stats s'ouvre en double)"; then
   backup="$(backup_copy "$ZSHRC")"

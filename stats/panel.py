@@ -416,16 +416,18 @@ class Panel:
         self.compact = width < 92
         self.tiny = width < 62
 
-        self.screen.addnstr(
-            0, 0, "  CONSOMMATION DES AGENTS", width - 1,
-            curses.color_pair(4) | curses.A_BOLD,
-        )
-        self.screen.addnstr(
-            1, 0,
+        titre = "  CONSOMMATION DES AGENTS"
+        totaux = (
             f"  {PERIODS[self.period][0]}   ${self.total_cost:,.2f}   "
-            f"{human(self.total_tokens)} tokens   ({len(self.rows)} lignes)",
-            width - 1, curses.color_pair(2) | curses.A_BOLD,
+            f"{human(self.total_tokens)} tokens   ({len(self.rows)} lignes)"
         )
+        self.screen.addnstr(0, 0, titre, width - 1, curses.color_pair(4) | curses.A_BOLD)
+        self.screen.addnstr(1, 0, totaux, width - 1, curses.color_pair(2) | curses.A_BOLD)
+
+        # Occupation reelle des trois premieres rangees. Le badge s'en sert
+        # pour ne jamais ecrire par-dessus, au lieu d'un plancher devine.
+        # La rangee 2 est vide : c'est elle qui recoit le texte le plus long.
+        occupation = [len(titre), len(totaux), 0]
 
         self.draw_chips(3, "periode", [p[0] for p in PERIODS], self.period, "period")
         self.draw_chips(4, "vue", [v[1] for v in VIEWS], self.view, "view")
@@ -444,7 +446,7 @@ class Panel:
 
         # Le badge est dessine en dernier sur la zone d'en-tete, dont la moitie
         # droite est vide. Il ne decale rien : le tableau garde sa place.
-        self.draw_badge(width, row)
+        self.draw_badge(width, row, occupation)
 
         top = row + 1
         quota_height = min(len(self.quota_rows) + 2, 12) if self.show_quotas else 0
@@ -481,34 +483,52 @@ class Panel:
         self.badge_pairs[(high, low)] = pair
         return pair
 
-    def draw_badge(self, width, header_rows):
+    def draw_badge(self, width, header_rows, occupation):
         """Avatar et profil GitHub, cales en haut a droite de l'en-tete.
+
+        Chaque element decide seul s'il tient, en comparant la place qu'il
+        demande a l'occupation reelle de sa rangee. Un pane etroit perd donc le
+        compteur de depots avant l'URL, et l'URL avant le nom, au lieu de tout
+        perdre d'un coup sous un seuil unique.
 
         L'URL est ecrite en clair, sans sequence OSC 8 : curses compte les
         caracteres qu'il ecrit pour suivre le curseur, une sequence d'echappement
-        y decalerait tout l'affichage. C'est WezTerm qui reconnait l'URL et la
-        rend cliquable, et le clic est de toute facon gere ici.
+        y decalerait tout l'affichage. WezTerm la reconnait et la rend cliquable,
+        et le clic est de toute facon gere ici.
         """
         if not self.badge or not self.show_badge:
             return
 
         url = self.badge.get("url") or ""
+        name = self.badge.get("name") or ""
+        repos = self.badge.get("public_repos")
         columns = self.badge.get("columns") or 0
         lines = min(self.badge.get("lines") or 0, header_rows)
+        art_width = columns + 2
 
-        # Trop etroit pour l'image : on sauve au moins le lien.
-        if width < 108 or lines < 4:
-            if width >= 74 and url:
-                start = width - len(url) - 2
-                if start > 44:
-                    try:
-                        self.screen.addnstr(0, start, url, len(url), curses.A_DIM)
-                        self.hitboxes[(0, start, start + len(url))] = ("profile", 0)
-                    except curses.error:
-                        pass
+        def place(row, text):
+            """Colonne de depart si le texte tient sur cette rangee, sinon None."""
+            if not text or row >= max(lines, 1):
+                return None
+            start = width - art_width - len(text) - 2
+            return start if start > occupation[row] + 1 else None
+
+        # L'image ne s'affiche que si le nom tient a cote : un avatar seul,
+        # sans rien pour l'identifier, n'apprend rien a personne.
+        art_visible = lines >= 4 and place(0, name) is not None
+
+        if not art_visible:
+            # Repli : le lien seul, sur la premiere rangee, sans image.
+            start = width - len(url) - 2
+            if url and start > occupation[0] + 1:
+                try:
+                    self.screen.addnstr(0, start, url, len(url), curses.A_DIM)
+                    self.hitboxes[(0, start, start + len(url))] = ("profile", 0)
+                except curses.error:
+                    pass
             return
 
-        art_start = width - columns - 2
+        art_start = width - art_width
         for y in range(lines):
             for x, cell in enumerate(self.badge["cells"][y]):
                 pair = self.badge_pair(cell[0], cell[1])
@@ -519,18 +539,16 @@ class Panel:
                 except curses.error:
                     pass
 
-        texts = [(self.badge.get("name") or "", curses.A_BOLD), (url, curses.A_DIM)]
-        repos = self.badge.get("public_repos")
+        # Rangee 2 pour l'URL : elle est vide, donc elle accepte le texte le
+        # plus long. Le compteur de depots va rangee 1, la plus contrainte,
+        # et disparait donc en premier.
+        entries = [(0, name, curses.A_BOLD), (2, url, curses.A_DIM)]
         if repos is not None:
-            texts.append((f"{repos} depots publics", curses.A_DIM))
+            entries.append((1, f"{repos} depots publics", curses.A_DIM))
 
-        for offset, (text, attribute) in enumerate(texts):
-            row = offset + 1
-            if row >= lines or not text:
-                continue
-            start = art_start - len(text) - 2
-            # On ne mord jamais sur l'en-tete de gauche, qui porte les totaux.
-            if start < 46:
+        for row, text, attribute in entries:
+            start = place(row, text)
+            if start is None:
                 continue
             try:
                 self.screen.addnstr(row, start, text, len(text), attribute)

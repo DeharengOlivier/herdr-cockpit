@@ -129,9 +129,15 @@ bin/github-badge.py your-handle --size 8 # taller, if you widened the header
 ```
 
 Press `p` to hide or show the badge, `o` to open the profile in a browser, or
-click the URL. Below 108 columns the avatar is dropped and only the link
-remains; below 74 columns the whole badge goes, so the table never gets
-squeezed. No `GITHUB_USER` means no badge and no mention of one.
+click the URL. It degrades by measured steps so the table is never squeezed:
+
+| Panel width | What you get |
+|---|---|
+| 96 and up | Avatar, name, link, repo count |
+| 81 to 95 | Link only |
+| 80 and below | Nothing |
+
+No `GITHUB_USER` means no badge and no mention of one.
 
 The rendering is a real HTTP call to `api.github.com` at install time, and
 nothing else: no token, no authentication, only the public profile endpoint.
