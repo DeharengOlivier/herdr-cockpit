@@ -104,43 +104,38 @@ machine. Only `spaces.conf.example` is published.
 
 ## Your GitHub profile in the panel
 
-Set `GITHUB_USER` in `spaces.conf` and the installer renders your avatar into
-the top-right corner of the stats panel, next to your name, a clickable profile
-link and your public repo count.
+Put your handle in `spaces.conf` and the stats panel shows your name, a
+clickable profile link and your public repo count, top right of the header:
 
 ```conf
 GITHUB_USER=your-handle
 ```
 
-The avatar is drawn with Unicode upper-half blocks (`▀`), one character
-carrying two pixels through its foreground and background colours, quantised to
-the xterm-256 palette. That means it is ordinary coloured text: it survives
-curses redraws, needs no experimental terminal flag, and works over SSH. A
-12x6 badge costs about thirty colour pairs out of the 32767 a modern terminal
-offers.
+It is your handle, not anyone else's. `spaces.conf` is gitignored, so cloning
+this repository gives you an empty `GITHUB_USER` and your own profile once you
+fill it in. Leave it empty and the panel shows nothing and mentions nothing.
 
-`bin/github-badge.py` does all the work once at install time (fetch, PNG
-decode, box downsample, quantise) and writes a small JSON file. The panel only
-draws it, so it stays offline and instant. Regenerate it any time:
+`bin/github-badge.py` makes one HTTP call at install time to the public
+`api.github.com/users/<login>` endpoint, with no token and no authentication,
+and writes a four-field JSON file. The panel only reads that file, so it stays
+instant and works offline. Refresh it whenever you like:
 
 ```sh
-bin/github-badge.py your-handle          # 12x6, the header height
-bin/github-badge.py your-handle --size 8 # taller, if you widened the header
+bin/github-badge.py your-handle
 ```
 
-Press `p` to hide or show the badge, `o` to open the profile in a browser, or
-click the URL. It degrades by measured steps so the table is never squeezed:
+The three lines are placed against the header content already on their row, not
+against a global threshold, so a narrow panel drops them one at a time and the
+table is never squeezed:
 
-| Panel width | What you get |
-|---|---|
-| 96 and up | Avatar, name, link, repo count |
-| 81 to 95 | Link only |
-| 80 and below | Nothing |
+| Row | Shown | Needs |
+|---|---|---|
+| 2 (empty row) | the profile link | ~38 columns |
+| 0 (next to the title) | your name | ~45 columns |
+| 1 (next to the totals) | public repo count | ~72 columns |
 
-No `GITHUB_USER` means no badge and no mention of one.
-
-The rendering is a real HTTP call to `api.github.com` at install time, and
-nothing else: no token, no authentication, only the public profile endpoint.
+Press `p` to hide or show it, `o` to open the profile in a browser, or click
+the link. WezTerm turns the plain URL into a clickable hyperlink on its own.
 
 ## Keybindings
 

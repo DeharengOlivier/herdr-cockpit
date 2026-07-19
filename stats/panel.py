@@ -287,15 +287,12 @@ def quotas():
     return out
 
 
-# ---------------------------------------------------------------- badge GitHub
+# --------------------------------------------------------------- profil GitHub
 BADGE_PATH = Path.home() / ".config" / "herdr-cockpit" / "github-badge.json"
-# Les paires 1 a 6 appartiennent au panneau : le badge commence bien au-dessus.
-BADGE_PAIR_BASE = 50
-BADGE_PAIR_MAX = 200
 
 
 def load_badge():
-    """Badge produit par bin/github-badge.py. Absent tant que GITHUB_USER
+    """Profil produit par bin/github-badge.py. Absent tant que GITHUB_USER
     n'est pas renseigne dans spaces.conf, auquel cas le panneau n'en parle pas.
     """
     try:
@@ -303,7 +300,7 @@ def load_badge():
             badge = json.load(handle)
     except (OSError, ValueError):
         return None
-    return badge if badge.get("cells") else None
+    return badge if badge.get("url") else None
 
 
 def open_url(url):
@@ -346,7 +343,6 @@ class Panel:
         self.hitboxes = {}
         self.compact = self.tiny = False
         self.badge = load_badge()
-        self.badge_pairs = {}   # (avant-plan, arriere-plan) -> numero de paire
         self.show_badge = True
 
     # -- donnees ---------------------------------------------------------
@@ -463,33 +459,13 @@ class Panel:
         self.screen.addnstr(height - 1, 0, hint[: width - 1], width - 1, curses.A_DIM)
         self.screen.refresh()
 
-    def badge_pair(self, high, low):
-        """Numero de paire curses pour un couple de couleurs, alloue a la demande.
-
-        Un avatar de 14x7 ne demande qu'une trentaine de paires distinctes, tres
-        loin du plafond du terminal. Le garde-fou couvre le cas d'une image
-        beaucoup plus riche fournie a la main.
-        """
-        pair = self.badge_pairs.get((high, low))
-        if pair is not None:
-            return pair
-        if len(self.badge_pairs) >= BADGE_PAIR_MAX:
-            return None
-        pair = BADGE_PAIR_BASE + len(self.badge_pairs)
-        try:
-            curses.init_pair(pair, high, low)
-        except curses.error:
-            return None
-        self.badge_pairs[(high, low)] = pair
-        return pair
-
     def draw_badge(self, width, header_rows, occupation):
-        """Avatar et profil GitHub, cales en haut a droite de l'en-tete.
+        """Profil GitHub, cale en haut a droite de l'en-tete.
 
-        Chaque element decide seul s'il tient, en comparant la place qu'il
-        demande a l'occupation reelle de sa rangee. Un pane etroit perd donc le
-        compteur de depots avant l'URL, et l'URL avant le nom, au lieu de tout
-        perdre d'un coup sous un seuil unique.
+        Chaque ligne decide seule si elle tient, en comparant sa longueur a
+        l'occupation reelle de sa rangee plutot qu'a un seuil global. Un pane
+        etroit perd donc le compteur de depots, puis le nom, et garde le lien
+        jusqu'au bout, au lieu de tout perdre d'un coup.
 
         L'URL est ecrite en clair, sans sequence OSC 8 : curses compte les
         caracteres qu'il ecrit pour suivre le curseur, une sequence d'echappement
@@ -502,53 +478,19 @@ class Panel:
         url = self.badge.get("url") or ""
         name = self.badge.get("name") or ""
         repos = self.badge.get("public_repos")
-        columns = self.badge.get("columns") or 0
-        lines = min(self.badge.get("lines") or 0, header_rows)
-        art_width = columns + 2
-
-        def place(row, text):
-            """Colonne de depart si le texte tient sur cette rangee, sinon None."""
-            if not text or row >= max(lines, 1):
-                return None
-            start = width - art_width - len(text) - 2
-            return start if start > occupation[row] + 1 else None
-
-        # L'image ne s'affiche que si le nom tient a cote : un avatar seul,
-        # sans rien pour l'identifier, n'apprend rien a personne.
-        art_visible = lines >= 4 and place(0, name) is not None
-
-        if not art_visible:
-            # Repli : le lien seul, sur la premiere rangee, sans image.
-            start = width - len(url) - 2
-            if url and start > occupation[0] + 1:
-                try:
-                    self.screen.addnstr(0, start, url, len(url), curses.A_DIM)
-                    self.hitboxes[(0, start, start + len(url))] = ("profile", 0)
-                except curses.error:
-                    pass
-            return
-
-        art_start = width - art_width
-        for y in range(lines):
-            for x, cell in enumerate(self.badge["cells"][y]):
-                pair = self.badge_pair(cell[0], cell[1])
-                if pair is None:
-                    continue
-                try:
-                    self.screen.addstr(y, art_start + x, "▀", curses.color_pair(pair))
-                except curses.error:
-                    pass
 
         # Rangee 2 pour l'URL : elle est vide, donc elle accepte le texte le
-        # plus long. Le compteur de depots va rangee 1, la plus contrainte,
-        # et disparait donc en premier.
-        entries = [(0, name, curses.A_BOLD), (2, url, curses.A_DIM)]
+        # plus long. Le compteur va rangee 1, la plus chargee a gauche par les
+        # totaux, et disparait donc en premier.
+        entries = [(2, url, curses.A_DIM), (0, name, curses.A_BOLD)]
         if repos is not None:
             entries.append((1, f"{repos} depots publics", curses.A_DIM))
 
         for row, text, attribute in entries:
-            start = place(row, text)
-            if start is None:
+            if not text or row >= header_rows:
+                continue
+            start = width - len(text) - 2
+            if start <= occupation[row] + 1:
                 continue
             try:
                 self.screen.addnstr(row, start, text, len(text), attribute)
