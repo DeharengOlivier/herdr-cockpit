@@ -42,6 +42,7 @@ SPACES_CONF="${COCKPIT_SPACES_CONF:-$COCKPIT_DIR/spaces.conf}"
 STATS_LABEL="${COCKPIT_STATS_LABEL:-▦ Stats}"
 INTERVAL="${COCKPIT_WATCH_INTERVAL:-2}"
 SESSION="${COCKPIT_SESSION:-default}"
+WATCH_PID_FILE="${COCKPIT_WATCH_PID_FILE:-$HOME/.config/herdr-cockpit/watch.pid}"
 
 # --- Lecture de spaces.conf ------------------------------------------------
 # Format : une directive PROJECTS_ROOT=... optionnelle, puis des lignes
@@ -167,6 +168,12 @@ ensure_spaces() {
 }
 
 watch_loop() {
+  # Le fichier de PID est ecrit par la surveillance elle-meme, et efface a sa
+  # sortie quelle qu'en soit la cause.
+  mkdir -p "$(dirname "$WATCH_PID_FILE")" 2>/dev/null
+  printf '%s\n' "$$" > "$WATCH_PID_FILE"
+  trap 'rm -f "$WATCH_PID_FILE"' EXIT INT TERM
+
   while true; do
     sleep "$INTERVAL"
     # La surveillance ne survit pas au serveur : sans lui elle n'a plus d'objet
@@ -177,7 +184,17 @@ watch_loop() {
 }
 
 start_watcher() {
-  pgrep -f "bootstrap.sh --watch" >/dev/null 2>&1 && return 0
+  # Un fichier de PID plutot qu'un pgrep sur le nom du script : celui-ci
+  # depend du chemin d'appel (lien symbolique ou fichier reel), donc le motif
+  # ratait une surveillance lancee autrement et en demarrait une deuxieme.
+  if [ -f "$WATCH_PID_FILE" ]; then
+    local existing
+    existing="$(cat "$WATCH_PID_FILE" 2>/dev/null)"
+    if [ -n "$existing" ] && kill -0 "$existing" 2>/dev/null; then
+      return 0
+    fi
+    rm -f "$WATCH_PID_FILE"
+  fi
   nohup "$SELF" --watch >/dev/null 2>&1 &
   disown 2>/dev/null || true
 }
