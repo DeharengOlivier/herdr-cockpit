@@ -1,16 +1,16 @@
 #!/bin/bash
-# herdr-cockpit : desinstallation.
+# herdr-cockpit : uninstallation.
 #
-#   ./uninstall.sh              interactif
-#   ./uninstall.sh --yes        sans confirmation
-#   ./uninstall.sh --dry-run    montre ce qui serait fait
+#   ./uninstall.sh              interactive
+#   ./uninstall.sh --yes        no confirmation
+#   ./uninstall.sh --dry-run    shows what would be done
 #
-# Rejoue le manifeste d'installation a l'envers : chaque lien pose est retire,
-# chaque fichier sauvegarde est remis en place. Ce qui existait avant est donc
-# restaure, y compris un ~/.zshrc et un config.toml anterieurs.
+# Replays the install manifest backwards : every link laid down is removed,
+# every backed up file is put back. Whatever existed before is therefore
+# restored, including an earlier ~/.zshrc and an earlier config.toml.
 #
-# Ce que ce script ne touche pas : le depot lui-meme, votre spaces.conf, et
-# Herdr, WezTerm ou python3, qui sont des installations independantes.
+# What this script does not touch : the repository itself, your spaces.conf,
+# and Herdr, WezTerm or python3, which are independent installations.
 
 set -uo pipefail
 
@@ -23,8 +23,8 @@ for arg in "$@"; do
   case "$arg" in
     --yes|-y)  ASSUME_YES=1 ;;
     --dry-run) DRY_RUN=1 ;;
-    --help|-h) sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) printf 'option inconnue : %s\n' "$arg" >&2; exit 2 ;;
+    --help|-h) sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) printf 'unknown option : %s\n' "$arg" >&2; exit 2 ;;
   esac
 done
 
@@ -40,36 +40,36 @@ run() {
 }
 
 if [ ! -f "$MANIFEST" ]; then
-  printf 'Aucun manifeste : rien n a ete installe depuis ce depot.\n' >&2
-  printf 'Attendu : %s\n' "$MANIFEST" >&2
+  printf 'No manifest : nothing has been installed from this repository.\n' >&2
+  printf 'Expected : %s\n' "$MANIFEST" >&2
   exit 1
 fi
 
-printf '\nA restaurer, d apres %s :\n\n' "$MANIFEST"
+printf '\nTo be restored, according to %s :\n\n' "$MANIFEST"
 while IFS="	" read -r kind target backup; do
   [ -z "${kind:-}" ] && continue
   if [ -n "${backup:-}" ]; then
-    printf '  %-10s %s\n             (restaure depuis %s)\n' "$kind" "$target" "$(basename "$backup")"
+    printf '  %-10s %s\n             (restored from %s)\n' "$kind" "$target" "$(basename "$backup")"
   else
-    printf '  %-10s %s\n             (sera simplement retire)\n' "$kind" "$target"
+    printf '  %-10s %s\n             (will simply be removed)\n' "$kind" "$target"
   fi
 done <"$MANIFEST"
 printf '\n'
 
 if [ "$ASSUME_YES" != "1" ] && [ "$DRY_RUN" != "1" ]; then
   if [ ! -t 0 ]; then
-    printf 'Sortie non interactive : relancez avec --yes.\n' >&2
+    printf 'Non interactive session : run again with --yes.\n' >&2
     exit 1
   fi
-  printf 'Confirmer la desinstallation ? [o/N] '
+  printf 'Confirm the uninstallation ? [y/N] '
   read -r answer </dev/tty || answer=""
-  case "$answer" in [oOyY]*) ;; *) printf 'Annule.\n'; exit 0 ;; esac
+  case "$answer" in [oOyY]*) ;; *) printf 'Cancelled.\n'; exit 0 ;; esac
 fi
 
 printf '\n'
 
-# A l'envers : les entrees les plus recentes d'abord, pour que des poses
-# successives sur une meme cible se defassent dans le bon ordre.
+# Backwards : the most recent entries first, so that successive installs onto
+# the same target are undone in the right order.
 LINES="$(awk '{ lines[NR] = $0 } END { for (i = NR; i >= 1; i--) print lines[i] }' "$MANIFEST")"
 
 printf '%s\n' "$LINES" | while IFS="	" read -r kind target backup; do
@@ -77,44 +77,44 @@ printf '%s\n' "$LINES" | while IFS="	" read -r kind target backup; do
 
   case "$kind" in
     zshrc)
-      # On retire notre bloc par ses marqueurs plutot que de restaurer la
-      # sauvegarde : cela marche meme sans sauvegarde (fichier que nous avons
-      # cree nous-memes) et cela preserve tout ce que vous avez ajoute au
-      # fichier depuis l installation. La sauvegarde reste sur le disque.
+      # We remove our block by its markers rather than restoring the backup :
+      # that works even without a backup (a file we created ourselves) and it
+      # preserves everything you have added to the file since the install.
+      # The backup stays on disk.
       if [ -f "$target" ]; then
         if [ "$DRY_RUN" = "1" ]; then
-          printf '  [dry-run] retirer le bloc herdr-cockpit de %s\n' "$target"
+          printf '  [dry-run] remove the herdr-cockpit block from %s\n' "$target"
         else
           python3 - "$target" <<'PY'
 import sys
 
-chemin = sys.argv[1]
-with open(chemin, encoding="utf-8", errors="replace") as handle:
-    lignes = handle.readlines()
+path = sys.argv[1]
+with open(path, encoding="utf-8", errors="replace") as handle:
+    lines = handle.readlines()
 
-garde, dans_le_bloc = [], False
-for ligne in lignes:
-    nu = ligne.strip()
-    if nu == "# >>> herdr-cockpit >>>":
-        dans_le_bloc = True
+kept, inside_block = [], False
+for line in lines:
+    stripped = line.strip()
+    if stripped == "# >>> herdr-cockpit >>>":
+        inside_block = True
         continue
-    if nu == "# <<< herdr-cockpit <<<":
-        dans_le_bloc = False
+    if stripped == "# <<< herdr-cockpit <<<":
+        inside_block = False
         continue
-    if not dans_le_bloc:
-        garde.append(ligne)
+    if not inside_block:
+        kept.append(line)
 
-# On ne laisse pas une ligne vide orpheline la ou etait le bloc.
-while garde and not garde[-1].strip():
-    garde.pop()
-if garde:
-    garde[-1] = garde[-1].rstrip("\n") + "\n"
+# We do not leave an orphan blank line where the block used to be.
+while kept and not kept[-1].strip():
+    kept.pop()
+if kept:
+    kept[-1] = kept[-1].rstrip("\n") + "\n"
 
-with open(chemin, "w", encoding="utf-8") as handle:
-    handle.writelines(garde)
+with open(path, "w", encoding="utf-8") as handle:
+    handle.writelines(kept)
 PY
         fi
-        ok "bloc herdr-cockpit retire de ~/.zshrc"
+        ok "herdr-cockpit block removed from ~/.zshrc"
       fi
       ;;
     link|generated)
@@ -123,13 +123,13 @@ PY
       fi
       if [ -n "${backup:-}" ] && { [ -e "$backup" ] || [ -L "$backup" ]; }; then
         run mv "$backup" "$target"
-        ok "$(basename "$target") restaure"
+        ok "$(basename "$target") restored"
       else
-        ok "$(basename "$target") retire"
+        ok "$(basename "$target") removed"
       fi
       ;;
     *)
-      warn "entree de manifeste inconnue, ignoree : $kind"
+      warn "unknown manifest entry, ignored : $kind"
       ;;
   esac
 done
@@ -139,5 +139,5 @@ if [ "$DRY_RUN" != "1" ]; then
   rmdir "$STATE_DIR" 2>/dev/null || true
 fi
 
-printf '\n  Desinstalle. Le depot et votre spaces.conf sont intacts.\n'
-printf '  Herdr tourne peut-etre encore : herdr server stop\n\n'
+printf '\n  Uninstalled. The repository and your spaces.conf are untouched.\n'
+printf '  Herdr may still be running : herdr server stop\n\n'

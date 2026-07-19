@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Panneau interactif de consommation des agents.
+"""Interactive agent spend panel.
 
-Filtres cumulables (projet, modele, mois, jour), quatre vues, tri, recherche.
-Navigation clavier et souris. Lance : python3 panel.py
+Stackable filters (project, model, month, day), four views, sorting, search.
+Keyboard and mouse navigation. Run: python3 panel.py
 """
 
 import curses
@@ -14,7 +14,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-# ---------------------------------------------------------------- tarification
+# --------------------------------------------------------------------- pricing
 PRICING = {
     "claude-fable-5": (10.0, 50.0),
     "claude-mythos-5": (10.0, 50.0),
@@ -37,23 +37,23 @@ CACHE_PATH = (
 )
 
 PERIODS = [
-    ("Aujourd'hui", 1),
-    ("7 jours", 7),
-    ("30 jours", 30),
-    ("90 jours", 90),
-    ("Tout", None),
+    ("Today", 1),
+    ("7 days", 7),
+    ("30 days", 30),
+    ("90 days", 90),
+    ("All", None),
 ]
-# cle interne, libelle, index du champ dans les enregistrements
+# internal key, displayed label
 VIEWS = [
-    ("project", "Projets"),
-    ("model", "Modeles"),
-    ("month", "Mois"),
-    ("day", "Jours"),
+    ("project", "Projects"),
+    ("model", "Models"),
+    ("month", "Months"),
+    ("day", "Days"),
 ]
-SORTS = [("cost", "cout"), ("tokens", "tokens"), ("name", "nom")]
+SORTS = [("cost", "cost"), ("tokens", "tokens"), ("name", "name")]
 
 
-# ------------------------------------------------------------------ traitement
+# ------------------------------------------------------------------ processing
 def rate(model):
     base = model.split("[")[0].strip()
     if base in PRICING:
@@ -75,22 +75,22 @@ def cost(model, tok_in, tok_out, read, w5m, w1h):
     ) / 1_000_000
 
 
-# Racine commune des projets, renseignee par la directive PROJECTS_ROOT de
-# spaces.conf et transmise par bootstrap.sh. Elle sert uniquement a raccourcir
-# les noms affiches : sans elle on retombe sur le repertoire personnel.
+# Shared projects root, set by the PROJECTS_ROOT directive in spaces.conf and
+# passed along by bootstrap.sh. Its only purpose is to shorten the displayed
+# names: without it we fall back to the home directory.
 PROJECTS_ROOT = os.environ.get("COCKPIT_PROJECTS_ROOT", "")
 
 
 def pretty_project(cwd):
-    """Nom lisible d'un projet a partir du repertoire de travail d'une session.
+    """Readable project name derived from a session's working directory.
 
-    On lit le champ cwd du fichier de session, jamais le nom du dossier de
-    ~/.claude/projects : celui-ci encode les separateurs ET les espaces par des
-    tirets, ce qui rend le decodage ambigu des qu'un projet contient lui-meme
-    un tiret : "mon-projet" y devient indistinguable de "mon/projet".
+    We read the cwd field of the session file, never the directory name under
+    ~/.claude/projects: that one encodes both separators AND spaces as dashes,
+    which makes decoding ambiguous as soon as a project name contains a dash
+    itself: "my-project" becomes indistinguishable from "my/project".
     """
     if not cwd:
-        return "inconnu"
+        return "unknown"
     path = Path(cwd)
     parts = None
     for base in (PROJECTS_ROOT, str(Path.home())):
@@ -105,8 +105,8 @@ def pretty_project(cwd):
         parts = tuple(p for p in path.parts if p != "/")
     if not parts:
         return "~"
-    # Deux segments au maximum : assez pour distinguer deux projets homonymes
-    # ranges dans des groupes differents, sans deborder de la colonne.
+    # Two segments at most: enough to tell apart two same-named projects filed
+    # under different groups, without overflowing the column.
     return "/".join(parts[-2:]) if len(parts) > 1 else parts[0]
 
 
@@ -128,7 +128,7 @@ def parse_file(path):
                 usage = message.get("usage") or {}
                 if not usage:
                     continue
-                model = message.get("model") or "inconnu"
+                model = message.get("model") or "unknown"
                 if model.startswith("<"):
                     continue
                 stamp = entry.get("timestamp") or ""
@@ -196,7 +196,7 @@ def bucket_key(view, date, model, project):
 
 
 def aggregate(records, days, view, filters, sort_key, search):
-    """Applique periode + filtres cumules + recherche, puis regroupe selon la vue."""
+    """Apply period + stacked filters + search, then group according to the view."""
     cut = (
         "0000-00-00"
         if days is None
@@ -208,7 +208,7 @@ def aggregate(records, days, view, filters, sort_key, search):
     for date, model, project, tok_in, tok_out, read, w5m, w1h in records:
         if date < cut:
             continue
-        # Filtres cumulables : chacun doit passer.
+        # Stackable filters: every one of them has to pass.
         if filters.get("project") and project != filters["project"]:
             continue
         if filters.get("model") and model.replace("claude-", "") != filters["model"]:
@@ -242,18 +242,18 @@ def aggregate(records, days, view, filters, sort_key, search):
 
 
 def quotas():
-    # quota-axi est une dependance optionnelle : le panneau fonctionne sans,
-    # il perd seulement la section des quotas d'abonnement. On le dit au lieu
-    # de faire disparaitre la section en silence.
+    # quota-axi is an optional dependency: the panel works without it, it only
+    # loses the subscription quota section. We say so instead of making the
+    # section silently disappear.
     binary = Path.home() / ".local" / "bin" / "quota-axi"
     if not binary.exists():
         return [
             (
                 "quota-axi",
                 "",
-                "absent",
+                "missing",
                 None,
-                "npm install -g quota-axi  pour afficher les quotas",
+                "npm install -g quota-axi  to show quotas",
             )
         ]
     try:
@@ -273,7 +273,7 @@ def quotas():
         windows = provider.get("windows") or []
         if not windows:
             state = provider.get("state") or {}
-            out.append((name, plan, "", None, state.get("error") or "indisponible"))
+            out.append((name, plan, "", None, state.get("error") or "percentage unavailable"))
             continue
         for entry in windows:
             if entry.get("percentUsed") is not None:
@@ -287,13 +287,13 @@ def quotas():
     return out
 
 
-# --------------------------------------------------------------- profil GitHub
+# -------------------------------------------------------------- GitHub profile
 BADGE_PATH = Path.home() / ".config" / "herdr-cockpit" / "github-badge.json"
 
 
 def load_badge():
-    """Profil produit par bin/github-badge.py. Absent tant que GITHUB_USER
-    n'est pas renseigne dans spaces.conf, auquel cas le panneau n'en parle pas.
+    """Profile produced by bin/github-badge.py. Missing as long as GITHUB_USER
+    is not set in spaces.conf, in which case the panel simply never mentions it.
     """
     try:
         with open(BADGE_PATH, encoding="utf-8") as handle:
@@ -334,7 +334,7 @@ class Panel:
         self.selection = 0
         self.scroll = 0
         self.filters = {}
-        self.order = []  # ordre d'application, pour retirer le dernier
+        self.order = []  # order of application, so we can drop the last one
         self.search = ""
         self.searching = False
         self.show_quotas = True
@@ -345,9 +345,9 @@ class Panel:
         self.badge = load_badge()
         self.show_badge = True
 
-    # -- donnees ---------------------------------------------------------
+    # -- data ------------------------------------------------------------
     def load(self):
-        self.records = collect(lambda d, t: self.flash(f"Lecture des sessions...  {d}/{t}"))
+        self.records = collect(lambda d, t: self.flash(f"Reading sessions...  {d}/{t}"))
         self.quota_rows = quotas()
         self.recompute()
 
@@ -371,9 +371,9 @@ class Panel:
         except curses.error:
             pass
 
-    # -- filtres ---------------------------------------------------------
+    # -- filters ---------------------------------------------------------
     def apply_filter(self):
-        """Entrer sur une ligne la transforme en filtre, quelle que soit la vue."""
+        """Pressing enter on a row turns it into a filter, whatever the view."""
         if not self.rows:
             return
         key = VIEWS[self.view][0]
@@ -381,7 +381,7 @@ class Panel:
         self.filters[key] = value
         if key not in self.order:
             self.order.append(key)
-        # On bascule vers une vue qui apporte une information nouvelle.
+        # Switch to a view that still brings new information.
         remaining = [i for i, (name, _) in enumerate(VIEWS) if name not in self.filters]
         self.view = remaining[0] if remaining else self.view
         self.selection = 0
@@ -400,49 +400,49 @@ class Panel:
         self.search = ""
         self.recompute()
 
-    # -- rendu -----------------------------------------------------------
+    # -- rendering -------------------------------------------------------
     def draw(self):
         self.screen.erase()
         self.hitboxes = {}
         height, width = self.screen.getmaxyx()
         if height < 9 or width < 34:
-            self.screen.addnstr(0, 0, "Fenetre trop petite", max(1, width - 1))
+            self.screen.addnstr(0, 0, "Window too small", max(1, width - 1))
             self.screen.refresh()
             return
         self.compact = width < 92
         self.tiny = width < 62
 
-        titre = "  CONSOMMATION DES AGENTS"
-        totaux = (
+        title = "  AGENT SPEND"
+        totals = (
             f"  {PERIODS[self.period][0]}   ${self.total_cost:,.2f}   "
-            f"{human(self.total_tokens)} tokens   ({len(self.rows)} lignes)"
+            f"{human(self.total_tokens)} tokens   ({len(self.rows)} rows)"
         )
-        self.screen.addnstr(0, 0, titre, width - 1, curses.color_pair(4) | curses.A_BOLD)
-        self.screen.addnstr(1, 0, totaux, width - 1, curses.color_pair(2) | curses.A_BOLD)
+        self.screen.addnstr(0, 0, title, width - 1, curses.color_pair(4) | curses.A_BOLD)
+        self.screen.addnstr(1, 0, totals, width - 1, curses.color_pair(2) | curses.A_BOLD)
 
-        # Occupation reelle des trois premieres rangees. Le badge s'en sert
-        # pour ne jamais ecrire par-dessus, au lieu d'un plancher devine.
-        # La rangee 2 est vide : c'est elle qui recoit le texte le plus long.
-        occupation = [len(titre), len(totaux), 0]
+        # Actual occupancy of the first three rows. The badge relies on it to
+        # never write over them, instead of guessing a floor.
+        # Row 2 is empty: that is the one taking the longest text.
+        occupied = [len(title), len(totals), 0]
 
-        self.draw_chips(3, "periode", [p[0] for p in PERIODS], self.period, "period")
-        self.draw_chips(4, "vue", [v[1] for v in VIEWS], self.view, "view")
-        self.draw_chips(5, "tri", [s[1] for s in SORTS], self.sort, "sort")
+        self.draw_chips(3, "period", [p[0] for p in PERIODS], self.period, "period")
+        self.draw_chips(4, "view", [v[1] for v in VIEWS], self.view, "view")
+        self.draw_chips(5, "sort", [s[1] for s in SORTS], self.sort, "sort")
 
         row = 6
         if self.filters or self.search or self.searching:
             bits = [f"{k}={v}" for k, v in self.filters.items()]
             if self.search or self.searching:
-                bits.append(f"texte='{self.search}'" + ("_" if self.searching else ""))
+                bits.append(f"text='{self.search}'" + ("_" if self.searching else ""))
             self.screen.addnstr(
-                row, 2, ("filtres  " + "  ·  ".join(bits))[: width - 3],
+                row, 2, ("filters  " + "  ·  ".join(bits))[: width - 3],
                 width - 3, curses.color_pair(3) | curses.A_BOLD,
             )
             row += 1
 
-        # Le badge est dessine en dernier sur la zone d'en-tete, dont la moitie
-        # droite est vide. Il ne decale rien : le tableau garde sa place.
-        self.draw_badge(width, row, occupation)
+        # The badge is drawn last over the header area, whose right half is
+        # empty. It shifts nothing: the table keeps its place.
+        self.draw_badge(width, row, occupied)
 
         top = row + 1
         quota_height = min(len(self.quota_rows) + 2, 12) if self.show_quotas else 0
@@ -451,26 +451,27 @@ class Panel:
             self.draw_quotas(height - quota_height - 1, quota_height, width)
 
         hint = (
-            "  1-5 periode  tab vue  s tri  / chercher  entree filtrer  "
-            "echap retirer  c effacer  q quotas  r recharger  x quitter"
+            "  1-5 period  tab view  s sort  / search  enter filter  "
+            "esc remove  c clear  q quotas  r reload  x quit"
         )
         if self.badge:
-            hint += "  p/o profil"
+            hint += "  p/o profile"
         self.screen.addnstr(height - 1, 0, hint[: width - 1], width - 1, curses.A_DIM)
         self.screen.refresh()
 
-    def draw_badge(self, width, header_rows, occupation):
-        """Profil GitHub, cale en haut a droite de l'en-tete.
+    def draw_badge(self, width, header_rows, occupied):
+        """GitHub profile, pinned to the top right of the header.
 
-        Chaque ligne decide seule si elle tient, en comparant sa longueur a
-        l'occupation reelle de sa rangee plutot qu'a un seuil global. Un pane
-        etroit perd donc le compteur de depots, puis le nom, et garde le lien
-        jusqu'au bout, au lieu de tout perdre d'un coup.
+        Each line decides on its own whether it fits, by comparing its length
+        to the actual occupancy of its row rather than to a global threshold.
+        A narrow pane therefore loses the repo counter first, then the name,
+        and keeps the link to the very end, instead of losing everything at
+        once.
 
-        L'URL est ecrite en clair, sans sequence OSC 8 : curses compte les
-        caracteres qu'il ecrit pour suivre le curseur, une sequence d'echappement
-        y decalerait tout l'affichage. WezTerm la reconnait et la rend cliquable,
-        et le clic est de toute facon gere ici.
+        The URL is written as plain text, with no OSC 8 sequence: curses counts
+        the characters it writes to track the cursor, so an escape sequence
+        would shift the whole display. WezTerm recognises it and makes it
+        clickable, and the click is handled here anyway.
         """
         if not self.badge or not self.show_badge:
             return
@@ -479,18 +480,18 @@ class Panel:
         name = self.badge.get("name") or ""
         repos = self.badge.get("public_repos")
 
-        # Rangee 2 pour l'URL : elle est vide, donc elle accepte le texte le
-        # plus long. Le compteur va rangee 1, la plus chargee a gauche par les
-        # totaux, et disparait donc en premier.
+        # Row 2 for the URL: it is empty, so it accepts the longest text. The
+        # counter goes to row 1, the one most filled on the left by the totals,
+        # and therefore disappears first.
         entries = [(2, url, curses.A_DIM), (0, name, curses.A_BOLD)]
         if repos is not None:
-            entries.append((1, f"{repos} depots publics", curses.A_DIM))
+            entries.append((1, f"{repos} public repos", curses.A_DIM))
 
         for row, text, attribute in entries:
             if not text or row >= header_rows:
                 continue
             start = width - len(text) - 2
-            if start <= occupation[row] + 1:
+            if start <= occupied[row] + 1:
                 continue
             try:
                 self.screen.addnstr(row, start, text, len(text), attribute)
@@ -518,13 +519,13 @@ class Panel:
     def draw_table(self, top, table_height, width):
         name_width = 18 if self.tiny else (24 if self.compact else 30)
         if self.tiny:
-            header = f"  {'':<{name_width}}{'cout':>11}"
+            header = f"  {'':<{name_width}}{'cost':>11}"
         elif self.compact:
-            header = f"  {'':<{name_width}}{'cout':>11}{'tokens':>10}"
+            header = f"  {'':<{name_width}}{'cost':>11}{'tokens':>10}"
         else:
             header = (
-                f"  {'':<{name_width}}{'cout':>11}{'tokens':>10}"
-                f"  {'entree':>8}{'sortie':>8}{'cache':>9}"
+                f"  {'':<{name_width}}{'cost':>11}{'tokens':>10}"
+                f"  {'in':>8}{'out':>8}{'cache':>9}"
             )
         try:
             self.screen.addnstr(top, 0, header[: width - 1], width - 1, curses.A_DIM)
@@ -617,7 +618,7 @@ class Panel:
                 )
                 tail = f" {pct:5.1f}%"
                 if pct >= 100:
-                    tail += " EPUISE"
+                    tail += " USED UP"
                 elif not self.tiny:
                     tail += f"  {note}"
                 room = max(0, width - bar_col - width_bar - 1)
@@ -645,7 +646,7 @@ class Panel:
                     return
                 elif kind == "profile":
                     url = (self.badge or {}).get("url") or ""
-                    self.flash(f"Ouvert : {url}" if open_url(url) else "Navigateur indisponible")
+                    self.flash(f"Opened: {url}" if open_url(url) else "No browser available")
                     return
                 self.recompute()
                 return
@@ -707,9 +708,9 @@ class Panel:
                 self.show_badge = not self.show_badge
             elif key in (ord("o"), ord("O")) and self.badge:
                 url = self.badge.get("url") or ""
-                self.flash(f"Ouvert : {url}" if open_url(url) else "Navigateur indisponible")
+                self.flash(f"Opened: {url}" if open_url(url) else "No browser available")
             elif key in (ord("r"), ord("R")):
-                self.flash("Rechargement...")
+                self.flash("Reloading...")
                 self.load()
             elif key == curses.KEY_MOUSE:
                 try:

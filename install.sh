@@ -1,18 +1,18 @@
 #!/bin/bash
 # herdr-cockpit : installation.
 #
-#   ./install.sh              interactif
-#   ./install.sh --yes        repond oui a tout (non interactif)
-#   ./install.sh --force      ecrase config.toml au lieu de demander
-#   ./install.sh --dry-run    montre ce qui serait fait, n'ecrit rien
+#   ./install.sh              interactive
+#   ./install.sh --yes        answers yes to everything (non interactive)
+#   ./install.sh --force      overwrites config.toml instead of asking
+#   ./install.sh --dry-run    shows what would be done, writes nothing
 #
-# Principe : rien n'est copie, tout est lie. Le depot reste la source de
-# verite, un "git pull" met donc a jour l'installation sans la refaire.
-# Seul ~/.config/herdr/config.toml est genere, parce qu'il contient un chemin
-# absolu et qu'il vous appartient : il peut deja porter vos propres reglages.
+# Principle : nothing is copied, everything is linked. The repository stays the
+# source of truth, so a "git pull" updates the installation without redoing it.
+# Only ~/.config/herdr/config.toml is generated, because it carries an absolute
+# path and because it is yours : it may already hold your own settings.
 #
-# Tout fichier existant est deplace en <fichier>.bak-<horodatage> et consigne
-# dans un manifeste, que uninstall.sh sait rejouer a l'envers.
+# Any pre-existing file is moved to <file>.bak-<timestamp> and recorded in a
+# manifest, which uninstall.sh knows how to replay backwards.
 
 set -uo pipefail
 
@@ -34,8 +34,8 @@ for arg in "$@"; do
     --yes|-y)  ASSUME_YES=1 ;;
     --force)   FORCE=1 ;;
     --dry-run) DRY_RUN=1 ;;
-    --help|-h) sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) printf 'option inconnue : %s\n' "$arg" >&2; exit 2 ;;
+    --help|-h) sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) printf 'unknown option : %s\n' "$arg" >&2; exit 2 ;;
   esac
 done
 
@@ -48,13 +48,13 @@ confirm() {
   [ "$ASSUME_YES" = "1" ] && return 0
   [ -t 0 ] || return 1
   local answer
-  printf '    %s [o/N] ' "$1"
+  printf '    %s [y/N] ' "$1"
   read -r answer </dev/tty || return 1
   case "$answer" in [oOyY]*) return 0 ;; *) return 1 ;; esac
 }
 
 run() {
-  # Toute ecriture passe par ici, pour que --dry-run soit reellement sur.
+  # Every write goes through here, so that --dry-run is genuinely safe.
   if [ "$DRY_RUN" = "1" ]; then
     printf '    [dry-run] %s\n' "$*"
     return 0
@@ -63,13 +63,13 @@ run() {
 }
 
 record() {
-  # type <TAB> cible <TAB> sauvegarde ("" si la cible n'existait pas)
+  # type <TAB> target <TAB> backup ("" when the target did not exist)
   [ "$DRY_RUN" = "1" ] && return 0
   printf '%s\t%s\t%s\n' "$1" "$2" "${3:-}" >>"$MANIFEST"
 }
 
 backup_if_present() {
-  # Deplace un fichier ou lien existant, renvoie le chemin de sauvegarde.
+  # Moves an existing file or link aside, returns the backup path.
   local target="$1"
   if [ -e "$target" ] || [ -L "$target" ]; then
     local backup="$target.bak-$STAMP"
@@ -79,8 +79,8 @@ backup_if_present() {
 }
 
 backup_copy() {
-  # Sauvegarde en laissant l'original en place : pour les fichiers qu'on
-  # complete (~/.zshrc) plutot que remplace.
+  # Backs up while leaving the original in place : for the files we append to
+  # (~/.zshrc) rather than replace.
   local target="$1"
   if [ -e "$target" ]; then
     local backup="$target.bak-$STAMP"
@@ -92,12 +92,12 @@ backup_copy() {
 link() {
   local source="$1" target="$2" label="$3"
   if [ ! -e "$source" ]; then
-    err "$label : source introuvable ($source)"
+    err "$label : source not found ($source)"
     return 1
   fi
-  # Deja pointe au bon endroit : on ne touche a rien.
+  # Already pointing at the right place : we touch nothing.
   if [ -L "$target" ] && [ "$(readlink "$target")" = "$source" ]; then
-    ok "$label deja lie"
+    ok "$label already linked"
     return 0
   fi
   local backup
@@ -106,66 +106,66 @@ link() {
   run ln -s "$source" "$target"
   record link "$target" "$backup"
   if [ -n "$backup" ]; then
-    ok "$label lie (ancien fichier sauvegarde en $(basename "$backup"))"
+    ok "$label linked (previous file backed up as $(basename "$backup"))"
   else
-    ok "$label lie"
+    ok "$label linked"
   fi
 }
 
-# --- 1. Dependances --------------------------------------------------------
-step "Dependances"
+# --- 1. Dependencies -------------------------------------------------------
+step "Dependencies"
 
 missing=0
 if command -v herdr >/dev/null 2>&1; then
   ok "herdr $(herdr --version 2>/dev/null | awk '{print $2}')"
 else
-  err "herdr absent. Installez-le : brew install herdr   (ou https://herdr.dev)"
+  err "herdr missing. Install it : brew install herdr   (or https://herdr.dev)"
   missing=1
 fi
 
 if command -v wezterm >/dev/null 2>&1 || [ -d "/Applications/WezTerm.app" ]; then
   ok "WezTerm present"
 else
-  err "WezTerm absent. Installez-le : brew install --cask wezterm"
+  err "WezTerm missing. Install it : brew install --cask wezterm"
   missing=1
 fi
 
 if command -v python3 >/dev/null 2>&1; then
   ok "python3 $(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 else
-  err "python3 absent. Requis par le panneau de statistiques."
+  err "python3 missing. Required by the statistics panel."
   missing=1
 fi
 
 if command -v quota-axi >/dev/null 2>&1; then
-  ok "quota-axi present (quotas d'abonnement actifs)"
+  ok "quota-axi present (subscription quotas enabled)"
 else
-  warn "quota-axi absent : le panneau marchera, sans la section des quotas."
-  warn "  Pour l'ajouter : npm install -g quota-axi"
+  warn "quota-axi missing : the panel will work, without the quotas section."
+  warn "  To add it : npm install -g quota-axi"
 fi
 
 if [ "$missing" != "0" ]; then
-  printf '\nInstallation interrompue : une dependance obligatoire manque.\n' >&2
+  printf '\nInstallation aborted : a required dependency is missing.\n' >&2
   exit 1
 fi
 
 [ "$DRY_RUN" = "1" ] || mkdir -p "$STATE_DIR" "$BIN_DIR"
 
 # --- 2. spaces.conf --------------------------------------------------------
-step "Vos spaces"
+step "Your spaces"
 
 SPACES_CREATED=0
 if [ -f "$COCKPIT_DIR/spaces.conf" ]; then
   count="$(grep -c "$(printf '\t')" "$COCKPIT_DIR/spaces.conf" 2>/dev/null || echo 0)"
-  ok "spaces.conf present ($count space(s) declare(s))"
+  ok "spaces.conf present ($count space(s) declared)"
 else
   run cp "$COCKPIT_DIR/spaces.conf.example" "$COCKPIT_DIR/spaces.conf"
   SPACES_CREATED=1
-  warn "spaces.conf cree depuis l'exemple. Il contient des chemins fictifs."
+  warn "spaces.conf created from the example. It holds placeholder paths."
 fi
 
-# --- 3. Badge GitHub -------------------------------------------------------
-step "Profil GitHub"
+# --- 3. GitHub badge -------------------------------------------------------
+step "GitHub profile"
 
 GITHUB_USER=""
 if [ -f "$COCKPIT_DIR/spaces.conf" ]; then
@@ -174,22 +174,22 @@ if [ -f "$COCKPIT_DIR/spaces.conf" ]; then
 fi
 
 if [ -z "$GITHUB_USER" ]; then
-  warn "Pas de GITHUB_USER dans spaces.conf, donc pas de badge dans le panneau."
-  warn "  Renseignez-le puis relancez ./install.sh pour l'ajouter."
+  warn "No GITHUB_USER in spaces.conf, so no badge in the panel."
+  warn "  Fill it in then run ./install.sh again to add it."
 elif [ "$DRY_RUN" = "1" ]; then
-  printf '    [dry-run] generer le badge GitHub pour %s\n' "$GITHUB_USER"
+  printf '    [dry-run] generate the GitHub badge for %s\n' "$GITHUB_USER"
 else
   if badge_output="$(python3 "$COCKPIT_DIR/bin/github-badge.py" "$GITHUB_USER" 2>&1)"; then
-    ok "badge genere pour $GITHUB_USER"
+    ok "badge generated for $GITHUB_USER"
     record generated "$STATE_DIR/github-badge.json" ""
   else
-    # Jamais bloquant : le panneau fonctionne sans badge.
-    warn "badge non genere : $badge_output"
+    # Never blocking : the panel works without a badge.
+    warn "badge not generated : $badge_output"
   fi
 fi
 
-# --- 4. Commandes ----------------------------------------------------------
-step "Commandes"
+# --- 4. Commands -----------------------------------------------------------
+step "Commands"
 
 run chmod +x "$COCKPIT_DIR/bin/bootstrap.sh" "$COCKPIT_DIR/stats/panel.py"
 link "$COCKPIT_DIR/bin/bootstrap.sh" "$BIN_DIR/herdr-cockpit-bootstrap" "herdr-cockpit-bootstrap"
@@ -197,8 +197,8 @@ link "$COCKPIT_DIR/stats/panel.py"   "$BIN_DIR/herdr-cockpit-panel"     "herdr-c
 
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
-  *) warn "$BIN_DIR n'est pas dans votre PATH. Ce n'est pas bloquant : WezTerm"
-     warn "  et Herdr utilisent des chemins absolus." ;;
+  *) warn "$BIN_DIR is not in your PATH. This is not blocking : WezTerm"
+     warn "  and Herdr use absolute paths." ;;
 esac
 
 # --- 5. WezTerm ------------------------------------------------------------
@@ -209,16 +209,16 @@ link "$COCKPIT_DIR/config/wezterm.lua" "$WEZTERM_CONF" "wezterm.lua"
 step "Herdr"
 
 generate_herdr_conf() {
-  # Le seul fichier genere plutot que lie : il porte un chemin absolu.
-  # La destination est passee en argument, jamais lue depuis une globale.
-  local destination_final="$1"
-  local tmp="$destination_final.tmp-$STAMP"
+  # The only file generated rather than linked : it carries an absolute path.
+  # The destination is passed as an argument, never read from a global.
+  local final_destination="$1"
+  local tmp="$final_destination.tmp-$STAMP"
   if [ "$DRY_RUN" = "1" ]; then
-    printf '    [dry-run] generer %s\n' "$destination_final"
+    printf '    [dry-run] generate %s\n' "$final_destination"
     return 0
   fi
-  mkdir -p "$(dirname "$destination_final")"
-  # Substitution en python3 : sed casserait sur les chemins contenant / ou &.
+  mkdir -p "$(dirname "$final_destination")"
+  # Substitution done in python3 : sed would break on paths containing / or &.
   COCKPIT_PANEL="$COCKPIT_DIR/stats/panel.py" python3 - "$COCKPIT_DIR/config/herdr/config.toml" "$tmp" <<'PY'
 import os, sys
 source, destination = sys.argv[1], sys.argv[2]
@@ -228,26 +228,26 @@ content = content.replace("@@COCKPIT_PANEL@@", os.environ["COCKPIT_PANEL"])
 with open(destination, "w", encoding="utf-8") as handle:
     handle.write(content)
 PY
-  mv "$tmp" "$destination_final"
+  mv "$tmp" "$final_destination"
 }
 
 if [ ! -e "$HERDR_CONF" ]; then
   generate_herdr_conf "$HERDR_CONF"
   record generated "$HERDR_CONF" ""
-  ok "config.toml genere"
-elif [ "$FORCE" = "1" ] || confirm "config.toml existe deja. Le remplacer ? (sauvegarde faite)"; then
+  ok "config.toml generated"
+elif [ "$FORCE" = "1" ] || confirm "config.toml already exists. Replace it ? (a backup is kept)"; then
   backup="$(backup_if_present "$HERDR_CONF")"
   generate_herdr_conf "$HERDR_CONF"
   record generated "$HERDR_CONF" "$backup"
-  ok "config.toml remplace (ancien en $(basename "${backup:-aucun}"))"
+  ok "config.toml replaced (previous one in $(basename "${backup:-none}"))"
 else
-  # On ne fusionne pas a l'aveugle : ce fichier peut porter vos propres
-  # reglages, et une fusion TOML approximative casserait les deux.
+  # We do not merge blindly : this file may carry your own settings, and an
+  # approximate TOML merge would break both of them.
   sidecar="$HERDR_CONF.cockpit"
   generate_herdr_conf "$sidecar"
-  warn "config.toml conserve. Version cockpit ecrite a cote :"
+  warn "config.toml kept. Cockpit version written next to it :"
   warn "  $sidecar"
-  warn "Comparez puis fusionnez a la main :"
+  warn "Compare then merge by hand :"
   warn "  diff -u $HERDR_CONF $sidecar"
 fi
 
@@ -255,53 +255,53 @@ if command -v herdr >/dev/null 2>&1 && [ "$DRY_RUN" != "1" ]; then
   if herdr config check >/dev/null 2>&1; then
     ok "herdr config check : ok"
   else
-    err "herdr config check signale un probleme :"
+    err "herdr config check reports a problem :"
     herdr config check 2>&1 | sed 's/^/      /' >&2
   fi
 fi
 
-# --- 7. Garde zsh ----------------------------------------------------------
+# --- 7. zsh guard ----------------------------------------------------------
 step "Shell"
 
 GUARD_LINE="[ -f \"$COCKPIT_DIR/shell/herdr-autostart.zsh\" ] && source \"$COCKPIT_DIR/shell/herdr-autostart.zsh\""
 
-# On cherche la variable, pas le nom du fichier : un garde ecrit a la main
-# directement dans le .zshrc compte tout autant, et en ajouter un second ne
-# ferait que dupliquer la boucle.
+# We look for the variable, not for the file name : a guard written by hand
+# straight into the .zshrc counts just as much, and adding a second one would
+# only duplicate the loop.
 if [ -f "$ZSHRC" ] && grep -Fq "HERDR_AUTOSTART" "$ZSHRC"; then
-  ok "garde HERDR_AUTOSTART deja present dans ~/.zshrc"
-elif confirm "Ajouter le garde HERDR_AUTOSTART a ~/.zshrc ? (sans lui, le space Stats s'ouvre en double)"; then
+  ok "HERDR_AUTOSTART guard already present in ~/.zshrc"
+elif confirm "Add the HERDR_AUTOSTART guard to ~/.zshrc ? (without it, the Stats space opens twice)"; then
   backup="$(backup_copy "$ZSHRC")"
   if [ "$DRY_RUN" = "1" ]; then
-    printf '    [dry-run] ajouter le garde a %s\n' "$ZSHRC"
+    printf '    [dry-run] add the guard to %s\n' "$ZSHRC"
   else
-    # Bloc balise : uninstall.sh le retire par ses marqueurs, ce qui marche
-    # meme quand ce ~/.zshrc n'existait pas avant et n'a donc pas de
-    # sauvegarde, et sans jamais toucher au reste du fichier.
+    # Marked block : uninstall.sh removes it by its markers, which works even
+    # when this ~/.zshrc did not exist before and therefore has no backup, and
+    # without ever touching the rest of the file.
     {
       printf '\n# >>> herdr-cockpit >>>\n'
-      printf '# Lance une application directement dans un space.\n'
+      printf '# Launches an application straight into a space.\n'
       printf '%s\n' "$GUARD_LINE"
       printf '# <<< herdr-cockpit <<<\n'
     } >>"$ZSHRC"
   fi
   record zshrc "$ZSHRC" "$backup"
-  ok "garde ajoute a ~/.zshrc"
+  ok "guard added to ~/.zshrc"
 else
-  warn "Garde non installe. Le space Stats ouvrira un shell puis le panneau"
-  warn "  dans un second pane. Pour l'ajouter plus tard, mettez dans ~/.zshrc :"
+  warn "Guard not installed. The Stats space will open a shell, then the panel"
+  warn "  in a second pane. To add it later, put this in ~/.zshrc :"
   warn "  $GUARD_LINE"
 fi
 
-# --- 8. Suite --------------------------------------------------------------
-step "Termine"
+# --- 8. What next ----------------------------------------------------------
+step "Done"
 
 if [ "$SPACES_CREATED" = "1" ]; then
-  printf '\n  1. Declarez vos projets  :  %s\n' "$COCKPIT_DIR/spaces.conf"
-  printf '  2. Ouvrez WezTerm.\n\n'
+  printf '\n  1. Declare your projects :  %s\n' "$COCKPIT_DIR/spaces.conf"
+  printf '  2. Open WezTerm.\n\n'
 else
-  printf '\n  Ouvrez WezTerm : Herdr demarre avec vos spaces.\n\n'
+  printf '\n  Open WezTerm : Herdr starts with your spaces.\n\n'
 fi
-printf '  Raccourcis : Cmd+T onglet, Cmd+D split, Cmd+fleches navigation,\n'
-printf '               Cmd+B barre laterale, Ctrl-b puis i panneau de couts.\n'
-printf '  Desinstaller : %s/uninstall.sh\n\n' "$COCKPIT_DIR"
+printf '  Shortcuts : Cmd+T tab, Cmd+D split, Cmd+arrows navigation,\n'
+printf '              Cmd+B sidebar, Ctrl-b then i cost panel.\n'
+printf '  Uninstall : %s/uninstall.sh\n\n' "$COCKPIT_DIR"

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Recupere le profil GitHub affiche en haut du panneau de statistiques.
+"""Fetches the GitHub profile shown at the top of the stats panel.
 
-    github-badge.py <login> [--out FICHIER]
+    github-badge.py <login> [--out FILE]
 
-Ecrit un petit JSON (nom, URL, nombre de depots) que panel.py se contente
-d'afficher. L'appel reseau a lieu une fois a l'installation, jamais au
-lancement du panneau, qui reste donc instantane et fonctionne hors ligne.
+Writes a small JSON blob (name, URL, repository count) that panel.py merely
+displays. The network call happens once at install time, never when the panel
+starts, which therefore stays instant and works offline.
 
-Aucune dependance : urllib suffit. Aucune authentification : seul le point
-d'acces public /users/<login> est interroge, sans jeton.
+No dependency: urllib is enough. No authentication: only the public
+/users/<login> endpoint is queried, without a token.
 """
 
 import argparse
@@ -38,8 +38,8 @@ def build(login):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Profil GitHub pour herdr-cockpit")
-    parser.add_argument("login", help="identifiant GitHub")
+    parser = argparse.ArgumentParser(description="GitHub profile for herdr-cockpit")
+    parser.add_argument("login", help="GitHub username")
     parser.add_argument(
         "--out",
         default=str(Path.home() / ".config" / "herdr-cockpit" / "github-badge.json"),
@@ -50,23 +50,23 @@ def main():
         badge = build(arguments.login)
     except urllib.error.HTTPError as error:
         if error.code == 404:
-            print(f"compte GitHub introuvable : {arguments.login}", file=sys.stderr)
+            print(f"GitHub account not found: {arguments.login}", file=sys.stderr)
         elif error.code == 403:
-            print("limite de requetes GitHub atteinte, reessayez plus tard", file=sys.stderr)
+            print("GitHub rate limit reached, try again later", file=sys.stderr)
         else:
-            print(f"erreur HTTP {error.code} en interrogeant GitHub", file=sys.stderr)
+            print(f"HTTP error {error.code} while querying GitHub", file=sys.stderr)
         return 1
     except (urllib.error.URLError, TimeoutError) as error:
-        print(f"reseau indisponible : {error}", file=sys.stderr)
+        print(f"network unavailable: {error}", file=sys.stderr)
         return 1
     except (ValueError, KeyError) as error:
-        print(f"reponse GitHub inattendue : {error}", file=sys.stderr)
+        print(f"unexpected GitHub response: {error}", file=sys.stderr)
         return 1
 
     destination = Path(arguments.out)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(badge), encoding="utf-8")
-    print(f"profil ecrit : {destination}  ({badge['name']})")
+    print(f"profile written: {destination}  ({badge['name']})")
     return 0
 
 

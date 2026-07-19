@@ -1,64 +1,63 @@
-# herdr-cockpit : configuration Herdr.
+# herdr-cockpit: Herdr configuration.
 #
-# install.sh remplace @@COCKPIT_PANEL@@ par le chemin reel du panneau avant
-# d'ecrire ce fichier dans ~/.config/herdr/config.toml.
+# install.sh replaces @@COCKPIT_PANEL@@ with the real path of the panel before
+# writing this file to ~/.config/herdr/config.toml.
 #
-# Ce fichier ne couvre volontairement qu'une petite partie des options.
-# La reference complete de votre version :   herdr --default-config
-# Valider apres edition :                    herdr config check
-# Recharger sans redemarrer :                herdr server reload-config
+# This file deliberately covers only a small subset of the options.
+# The full reference for your version:   herdr --default-config
+# Validate after editing:                herdr config check
+# Reload without restarting:             herdr server reload-config
 
 [ui]
-# Le nom de l'agent s'affiche sur la bordure de sa pane : utile des que
-# plusieurs agents tournent cote a cote.
+# The agent name is displayed on the border of its pane: useful as soon as
+# several agents are running side by side.
 show_agent_labels_on_pane_borders = true
-# Les agents qui reclament votre attention remontent en haut de la colonne.
+# Agents asking for your attention move up to the top of the column.
 agent_panel_sort = "priority"
 
-# NE PAS activer hide_tab_bar_when_single_tab ici.
+# DO NOT enable hide_tab_bar_when_single_tab here.
 #
-# Il ferait disparaitre la barre d'onglets et son bouton "+" du space de
-# statistiques, ce qui serait souhaitable, mais il est global : les spaces
-# projets perdraient aussi leur barre tant qu'ils n'ont qu'un onglet.
+# It would make the tab bar and its "+" button disappear from the statistics
+# space, which would be desirable, but it is global: the project spaces would
+# lose their bar too as long as they only have a single tab.
 #
-# Herdr 0.7 ne sait pas cibler un seul space. La condition est ecrite en dur
-# dans src/ui.rs : `app.hide_tab_bar_when_single_tab && ws.tabs.len() == 1`,
-# ou seul le nombre d'onglets depend du space, jamais son identite. Il n'y a
-# ni section de config par workspace, ni fichier par repertoire, et les tokens
-# de report-metadata n'atteignent que la barre laterale.
+# Herdr 0.7 cannot target a single space. The condition is hardcoded in
+# src/ui.rs: `app.hide_tab_bar_when_single_tab && ws.tabs.len() == 1`, where
+# only the tab count depends on the space, never its identity. There is no
+# per-workspace config section, no per-directory file, and the report-metadata
+# tokens only reach the sidebar.
 #
-# Le "+" reste donc visible sur le space de statistiques. Il est inoffensif :
-# la surveillance de bootstrap.sh referme en deux secondes tout onglet cree.
+# The "+" therefore stays visible on the statistics space. It is harmless: the
+# bootstrap.sh watcher closes any tab that gets created within two seconds.
 
 [theme]
 name = "catppuccin"
-# Passer a true pour suivre l'apparence claire/sombre du terminal hote.
-# Renseigner alors dark_name et light_name (ex. "catppuccin" / "catppuccin-latte").
+# Switch to true to follow the light/dark appearance of the host terminal.
+# Then fill in dark_name and light_name (e.g. "catppuccin" / "catppuccin-latte").
 auto_switch = false
 
 [session]
-# Reprend les conversations des agents dans leur session native apres un
-# redemarrage du serveur Herdr. Sans cette option, le serveur restaure la
-# disposition des spaces mais les agents repartent de zero.
+# Resumes the agents' conversations in their native session after a restart of
+# the Herdr server. Without this option, the server restores the layout of the
+# spaces but the agents start over from scratch.
 #
-# Requiert les integrations officielles, qui seules remontent les references de
-# session :   herdr integration install claude
-#             herdr integration status
+# Requires the official integrations, which alone report the session
+# references:   herdr integration install claude
+#               herdr integration status
 resume_agents_on_restore = true
 
 [keys]
-# Fermeture d'un space desactivee : c'est ce raccourci (Ctrl-b Shift+D) qui
-# supprimait le space de statistiques par accident. Les onglets et les panes
-# restent fermables normalement, seuls les spaces sont proteges.
+# Closing a space is disabled: this shortcut (Ctrl-b Shift+D) is what was
+# deleting the statistics space by accident. Tabs and panes remain closable as
+# usual, only the spaces are protected.
 #
-# Cela ne couvre pas l'entree "close" du menu de la barre laterale : aucune
-# option de Herdr 0.7 ne permet de la masquer. C'est la surveillance lancee
-# par bootstrap.sh qui rattrape ce cas, en recreant le space en deux secondes.
+# This does not cover the "close" entry of the sidebar menu: no Herdr 0.7
+# option makes it possible to hide it. It is the watcher started by
+# bootstrap.sh that catches this case, recreating the space within two seconds.
 close_workspace = ""
 
-# Ctrl-b puis i : panneau de consommation des agents (tokens, cout, quotas)
-# en surimpression. Le meme panneau vit en permanence dans le space "▦ Stats"
-# de la colonne de gauche.
+# Ctrl-b then i: agent consumption panel (tokens, cost, quotas) as an overlay.
+# The same panel lives permanently in the "▦ Stats" space of the left column.
 [[keys.command]]
 key = "prefix+i"
 type = "popup"

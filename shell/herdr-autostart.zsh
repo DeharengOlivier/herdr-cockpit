@@ -1,21 +1,21 @@
-# herdr-cockpit : garde HERDR_AUTOSTART.
+# herdr-cockpit: HERDR_AUTOSTART guard.
 #
-# Sans ce garde, un space qui doit demarrer sur une application (le panneau de
-# statistiques) ouvre d'abord un shell, puis l'application dans un second pane.
-# On se retrouve avec un shell inutile a cote. Le garde intercepte la variable
-# avant que le shell ne rende la main et lance l'application a sa place.
+# Without this guard, a space that is supposed to start on an application (the
+# statistics panel) first opens a shell, then the application in a second pane.
+# We end up with a useless shell next to it. The guard intercepts the variable
+# before the shell hands control back and starts the application in its place.
 #
-# La boucle permet de quitter le panneau sans perdre le space : entree le
-# relance, Ctrl-D revient au shell.
+# The loop makes it possible to quit the panel without losing the space: enter
+# restarts it, Ctrl-D goes back to the shell.
 #
-# Installe par install.sh via une ligne "source" ajoutee a ~/.zshrc.
+# Installed by install.sh through a "source" line added to ~/.zshrc.
 
 if [[ -n "${HERDR_AUTOSTART:-}" ]]; then
   __herdr_cmd="$HERDR_AUTOSTART"
-  unset HERDR_AUTOSTART          # evite toute recursion dans les sous-shells
+  unset HERDR_AUTOSTART          # avoids any recursion in sub-shells
   while true; do
     eval "$__herdr_cmd"
-    printf '\n  [entree] relancer   ·   [Ctrl-D] revenir au shell\n'
+    printf '\n  [enter] restart   ·   [Ctrl-D] back to shell\n'
     read -r _ || break
   done
   unset __herdr_cmd

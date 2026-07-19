@@ -1,30 +1,29 @@
-# herdr-cockpit : les spaces recrees a chaque ouverture de WezTerm.
+# herdr-cockpit: the spaces recreated every time WezTerm opens.
 #
-# Copiez ce fichier en "spaces.conf" (non suivi par git) et adaptez-le.
+# Copy this file to "spaces.conf" (not tracked by git) and adapt it.
 #     cp spaces.conf.example spaces.conf
 #
-# Racine commune de vos projets. Optionnelle, mais elle raccourcit les chemins
-# ci-dessous et les noms de projets affiches dans le panneau de statistiques.
+# Common root of your projects. Optional, but it shortens the paths below and
+# the project names displayed in the statistics panel.
 PROJECTS_ROOT=~/dev
 
-# Votre identifiant GitHub. Optionnel. S'il est renseigne, install.sh recupere
-# votre avatar et l'affiche en haut a droite du panneau de statistiques, avec
-# votre nom et un lien cliquable vers votre profil. Laissez vide pour rien.
-# Pour le regenerer plus tard :  bin/github-badge.py <pseudo>
+# Your GitHub username. Optional. If it is filled in, install.sh fetches your
+# avatar and displays it in the top right corner of the statistics panel, along
+# with your name and a clickable link to your profile. Leave empty for nothing.
+# To regenerate it later:  bin/github-badge.py <username>
 GITHUB_USER=
 
-# Un space par ligne : le libelle, une TABULATION, puis le chemin.
+# One space per line: the label, a TAB, then the path.
 #
-#   - Le separateur doit etre une vraie tabulation, pas des espaces : les
-#     libelles comme les chemins peuvent contenir des espaces.
-#   - Un chemin relatif est resolu depuis PROJECTS_ROOT.
-#   - Un chemin absolu (/... ou ~/...) est pris tel quel.
-#   - L'ordre des lignes est l'ordre d'affichage dans la colonne de gauche.
-#   - Un chemin inexistant est signale puis ignore, jamais cree.
+#   - The separator must be a real tab, not spaces: both the labels and the
+#     paths may contain spaces.
+#   - A relative path is resolved from PROJECTS_ROOT.
+#   - An absolute path (/... or ~/...) is taken as is.
+#   - The order of the lines is the display order in the left column.
+#   - A path that does not exist is reported then ignored, never created.
 #
-# Le space de statistiques "▦ Stats" est ajoute automatiquement, ne le listez
-# pas ici.
+# The statistics space "▦ Stats" is added automatically, do not list it here.
 
 client-acme	clients/acme
-mon-produit	produits/mon-produit
+my-product	products/my-product
 dotfiles	~/.dotfiles

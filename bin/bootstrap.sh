@@ -1,26 +1,26 @@
 #!/bin/bash
-# herdr-cockpit : provisionne les spaces Herdr, puis attache la session.
+# herdr-cockpit: provisions the Herdr spaces, then attaches the session.
 #
-#   bootstrap.sh            provisionne + surveille en fond + attache la session
-#   bootstrap.sh --ensure   provisionne seulement, puis rend la main
-#   bootstrap.sh --watch    boucle de surveillance (usage interne)
+#   bootstrap.sh            provision + watch in background + attach the session
+#   bootstrap.sh --ensure   provision only, then hand back control
+#   bootstrap.sh --watch    watch loop (internal use)
 #
-# C'est ce script que WezTerm lance a l'ouverture (voir config/wezterm.lua).
+# This is the script WezTerm runs on startup (see config/wezterm.lua).
 #
-# Herdr ne sait pas proteger un space contre la fermeture : le raccourci peut
-# etre desactive, mais l'entree "close" du menu de la barre laterale n'est pas
-# masquable. La surveillance est donc le seul moyen de garantir qu'un space
-# ferme par megarde revienne.
+# Herdr cannot protect a space against closing: the shortcut can be disabled,
+# but the "close" entry in the sidebar menu cannot be hidden. Watching is
+# therefore the only way to guarantee that a space closed by mistake comes
+# back.
 #
-# Compatible bash 3.2 (la version livree avec macOS) : pas de tableau
-# associatif, pas de readarray, pas de ${var,,}.
+# Compatible with bash 3.2 (the version shipped with macOS): no associative
+# array, no readarray, no ${var,,}.
 
 set -uo pipefail
 
-# --- Localisation du depot -------------------------------------------------
-# Le script est appele via un lien symbolique depuis ~/.local/bin. On remonte
-# la chaine de liens pour retrouver la racine du depot, ce qui permet de le
-# deplacer ou de le mettre a jour par git pull sans jamais reinstaller.
+# --- Locating the repository -----------------------------------------------
+# The script is called through a symlink from ~/.local/bin. We walk the chain
+# of links back to find the repository root, which makes it possible to move
+# the repository or update it with git pull without ever reinstalling.
 SELF="${BASH_SOURCE[0]}"
 while [ -L "$SELF" ]; do
   link_target="$(readlink "$SELF")"
@@ -40,23 +40,23 @@ fi
 PANEL="$COCKPIT_DIR/stats/panel.py"
 SPACES_CONF="${COCKPIT_SPACES_CONF:-$COCKPIT_DIR/spaces.conf}"
 STATS_LABEL="${COCKPIT_STATS_LABEL:-▦ Stats}"
-# Le space de statistiques ne pointe volontairement PAS sur le depot : la barre
-# laterale affiche la branche git sous le libelle d'un space, et "main" sous
-# "▦ Stats" n'a aucun sens. Ce dossier n'est pas un depot, donc rien ne
-# s'affiche. Le panneau est lance par chemin absolu, le cwd ne le concerne pas.
+# The stats space deliberately does NOT point at the repository: the sidebar
+# shows the git branch under a space label, and "main" under "▦ Stats" makes
+# no sense. This directory is not a repository, so nothing is displayed. The
+# panel is started by absolute path, the cwd does not concern it.
 STATS_CWD="${COCKPIT_STATS_CWD:-$HOME/.config/herdr-cockpit}"
 INTERVAL="${COCKPIT_WATCH_INTERVAL:-2}"
 SESSION="${COCKPIT_SESSION:-default}"
 WATCH_PID_FILE="${COCKPIT_WATCH_PID_FILE:-$HOME/.config/herdr-cockpit/watch.pid}"
 
-# --- Lecture de spaces.conf ------------------------------------------------
-# Format : une directive PROJECTS_ROOT=... optionnelle, puis des lignes
-# "label <TAB> chemin". Les chemins relatifs sont resolus depuis PROJECTS_ROOT.
+# --- Reading spaces.conf ---------------------------------------------------
+# Format: an optional PROJECTS_ROOT=... directive, then lines of the form
+# "label <TAB> path". Relative paths are resolved from PROJECTS_ROOT.
 PROJECTS_ROOT=""
-SPACES=()          # entrees "label<TAB>chemin absolu"
+SPACES=()          # entries "label<TAB>absolute path"
 
 expand_path() {
-  # Developpe ~ et resout les chemins relatifs depuis PROJECTS_ROOT.
+  # Expands ~ and resolves relative paths from PROJECTS_ROOT.
   local raw="$1"
   case "$raw" in
     "~")   printf '%s' "$HOME" ;;
@@ -75,15 +75,15 @@ expand_path() {
 read_spaces_conf() {
   [ -f "$SPACES_CONF" ] || return 0
   local line label path_raw
-  # IFS vide : on preserve les espaces des libelles et des chemins.
+  # Empty IFS: we preserve the spaces inside labels and paths.
   while IFS= read -r line || [ -n "$line" ]; do
-    # Commentaires et lignes vides.
+    # Comments and empty lines.
     case "$line" in
       \#*|"") continue ;;
     esac
-    # Directives NOM=valeur. Seule PROJECTS_ROOT concerne ce script ; les
-    # autres (GITHUB_USER, lues par install.sh) sont ignorees sans bruit,
-    # pour ne pas avoir a modifier ce fichier a chaque nouvelle directive.
+    # NAME=value directives. Only PROJECTS_ROOT concerns this script; the
+    # others (GITHUB_USER, read by install.sh) are ignored silently, so that
+    # this file does not have to be edited for every new directive.
     case "$line" in
       PROJECTS_ROOT=*)
         PROJECTS_ROOT="$(expand_path "${line#PROJECTS_ROOT=}")"
@@ -93,11 +93,11 @@ read_spaces_conf() {
         continue
         ;;
     esac
-    # Separateur : tabulation. L'espace ne convient pas, les libelles comme
-    # les chemins en contiennent couramment.
+    # Separator: a tab. A space would not do, both labels and paths commonly
+    # contain spaces.
     case "$line" in
       *"	"*) ;;
-      *) printf 'spaces.conf : separateur tabulation manquant, ligne ignoree : %s\n' "$line" >&2
+      *) printf 'spaces.conf: missing tab separator, line ignored: %s\n' "$line" >&2
          continue ;;
     esac
     label="${line%%	*}"
@@ -106,10 +106,10 @@ read_spaces_conf() {
   done < "$SPACES_CONF"
 }
 
-# --- Dialogue avec le serveur Herdr ----------------------------------------
+# --- Talking to the Herdr server -------------------------------------------
 existing_labels() {
-  # Volontairement en python3 plutot qu'en jq : python3 est deja une
-  # dependance dure du panneau, jq ne l'est pas.
+  # Deliberately python3 rather than jq: python3 is already a hard dependency
+  # of the panel, jq is not.
   "$HERDR" workspace list 2>/dev/null | python3 -c '
 import json, sys
 try:
@@ -144,17 +144,17 @@ ensure_spaces() {
       continue
     fi
     if [ ! -d "$path" ]; then
-      printf 'space "%s" ignore : %s est introuvable\n' "$label" "$path" >&2
+      printf 'space "%s" skipped: %s not found\n' "$label" "$path" >&2
       continue
     fi
     if "$HERDR" workspace create --cwd "$path" --label "$label" --no-focus >/dev/null 2>&1; then
-      printf 'space cree : %s\n' "$label"
+      printf 'space created: %s\n' "$label"
     fi
   done
 
-  # Le space de statistiques demarre directement sur le panneau grace au garde
-  # HERDR_AUTOSTART (shell/herdr-autostart.zsh). Sans ce garde, la premiere
-  # pane serait un shell et le panneau s'ouvrirait dans un split inutile.
+  # The stats space starts straight on the panel thanks to the HERDR_AUTOSTART
+  # guard (shell/herdr-autostart.zsh). Without that guard, the first pane would
+  # be a shell and the panel would open in a useless split.
   if [ -f "$PANEL" ] && ! printf '%s\n' "$labels" | grep -Fxq "$STATS_LABEL"; then
     local panel_cmd="python3 '$PANEL'"
     local env_args=("--env" "HERDR_AUTOSTART=$panel_cmd")
@@ -168,7 +168,7 @@ ensure_spaces() {
         --label "$STATS_LABEL" \
         "${env_args[@]}" \
         --no-focus >/dev/null 2>&1; then
-      printf 'space cree : %s\n' "$STATS_LABEL"
+      printf 'space created: %s\n' "$STATS_LABEL"
     fi
   fi
 }
@@ -188,9 +188,9 @@ for workspace in (data.get("result") or {}).get("workspaces") or []:
 }
 
 enforce_single_tab() {
-  # Herdr ne sait pas verrouiller un space sur un seul onglet. On ferme donc
-  # ceux qui apparaissent en trop, en gardant celui du plus petit numero :
-  # c'est celui qui porte le panneau, les suivants sont forcement posterieurs.
+  # Herdr cannot lock a space to a single tab. So we close the extra ones that
+  # show up, keeping the one with the smallest number: that is the one holding
+  # the panel, the following ones are necessarily later.
   local ws_id
   ws_id="$(stats_workspace_id)"
   [ -z "$ws_id" ] && return 0
@@ -219,16 +219,16 @@ EOF
 }
 
 watch_loop() {
-  # Le fichier de PID est ecrit par la surveillance elle-meme, et efface a sa
-  # sortie quelle qu'en soit la cause.
+  # The PID file is written by the watcher itself, and removed when it exits
+  # whatever the cause.
   mkdir -p "$(dirname "$WATCH_PID_FILE")" 2>/dev/null
   printf '%s\n' "$$" > "$WATCH_PID_FILE"
   trap 'rm -f "$WATCH_PID_FILE"' EXIT INT TERM
 
   while true; do
     sleep "$INTERVAL"
-    # La surveillance ne survit pas au serveur : sans lui elle n'a plus d'objet
-    # et tournerait indefiniment dans le vide.
+    # The watcher does not outlive the server: without it there is nothing left
+    # to do and it would spin forever for nothing.
     server_is_up || exit 0
     ensure_spaces >/dev/null
     enforce_single_tab
@@ -236,9 +236,9 @@ watch_loop() {
 }
 
 start_watcher() {
-  # Un fichier de PID plutot qu'un pgrep sur le nom du script : celui-ci
-  # depend du chemin d'appel (lien symbolique ou fichier reel), donc le motif
-  # ratait une surveillance lancee autrement et en demarrait une deuxieme.
+  # A PID file rather than a pgrep on the script name: that name depends on the
+  # path used to call it (symlink or real file), so the pattern missed a
+  # watcher started another way and started a second one.
   if [ -f "$WATCH_PID_FILE" ]; then
     local existing
     existing="$(cat "$WATCH_PID_FILE" 2>/dev/null)"
@@ -251,10 +251,10 @@ start_watcher() {
   disown 2>/dev/null || true
 }
 
-# --- Entree ----------------------------------------------------------------
+# --- Entry point -----------------------------------------------------------
 if [ ! -x "$HERDR" ]; then
-  printf 'herdr introuvable (%s).\n' "$HERDR" >&2
-  printf 'Installez-le depuis https://herdr.dev, puis relancez.\n' >&2
+  printf 'herdr not found (%s).\n' "$HERDR" >&2
+  printf 'Install it from https://herdr.dev, then run again.\n' >&2
   exec "${SHELL:-/bin/zsh}"
 fi
 
@@ -269,10 +269,10 @@ case "${1:-}" in
     enforce_single_tab
     ;;
   --list)
-    # Verifie la lecture de spaces.conf sans rien creer. Signale les chemins
-    # absents, cause la plus frequente d'un space qui n'apparait pas.
-    printf 'fichier        : %s\n' "$SPACES_CONF"
-    printf 'PROJECTS_ROOT  : %s\n' "${PROJECTS_ROOT:-(non defini)}"
+    # Checks how spaces.conf is read without creating anything. Reports the
+    # missing paths, the most frequent cause of a space that never shows up.
+    printf 'file           : %s\n' "$SPACES_CONF"
+    printf 'PROJECTS_ROOT  : %s\n' "${PROJECTS_ROOT:-(not set)}"
     printf 'spaces         : %s\n\n' "${#SPACES[@]}"
     index=0
     while [ "$index" -lt "${#SPACES[@]}" ]; do
@@ -283,7 +283,7 @@ case "${1:-}" in
       if [ -d "$path" ]; then
         printf '  ok       %-24s %s\n' "$label" "$path"
       else
-        printf '  ABSENT   %-24s %s\n' "$label" "$path"
+        printf '  MISSING  %-24s %s\n' "$label" "$path"
       fi
     done
     ;;

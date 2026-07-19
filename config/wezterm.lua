@@ -3,99 +3,99 @@ local act = wezterm.action
 
 local config = wezterm.config_builder()
 
--- Apparence. Ces deux constantes sont les seules a changer pour repeindre
--- l'ensemble : la barre de fenetre se recalcule a partir d'elles plus bas, et
--- ne peut donc pas diverger du corps du terminal.
--- Themes disponibles : wezterm ls-fonts --list-system, et la galerie
+-- Appearance. These two constants are the only ones to change in order to
+-- repaint everything: the window bar is recomputed from them further down, and
+-- therefore cannot drift away from the terminal body.
+-- Available themes: wezterm ls-fonts --list-system, and the gallery at
 -- https://wezterm.org/colorschemes/index.html
 local THEME = "rose-pine-moon"
-local OPACITE = 0.8
+local OPACITY = 0.8
 
 config.color_scheme = THEME
 config.font = wezterm.font("Hack Nerd Font")
 config.font_size = 15.0
-config.window_background_opacity = OPACITE
+config.window_background_opacity = OPACITY
 config.macos_window_background_blur = 50
 
--- A l'ouverture de WezTerm on passe par bootstrap.sh, qui recree les spaces
--- manquants, lance la surveillance qui les remet en place s'ils sont fermes,
--- puis attache la session existante ("session attach default" plutot qu'un
--- simple "herdr", qui creait un space supplementaire a chaque ouverture).
+-- When WezTerm opens we go through bootstrap.sh, which recreates the missing
+-- spaces, starts the watcher that puts them back if they get closed, then
+-- attaches the existing session ("session attach default" rather than a plain
+-- "herdr", which used to create an extra space on every launch).
 --
--- Le chemin passe par le lien symbolique pose par install.sh, jamais par
--- l'emplacement du depot : celui-ci peut etre deplace sans casser WezTerm.
+-- The path goes through the symlink installed by install.sh, never through the
+-- repository location: the repo can be moved without breaking WezTerm.
 config.default_prog = {
 	"/bin/bash",
 	(os.getenv("HOME") or "") .. "/.local/bin/herdr-cockpit-bootstrap",
 }
 
--- Barre de fenetre deplacable.
--- INTEGRATED_BUTTONS dessine les boutons rouge/jaune/vert dans la barre de
--- WezTerm plutot que dans une barre de titre macOS. L'espace vide de cette
--- barre sert de zone de glisser pour deplacer la fenetre a la souris.
+-- Draggable window bar.
+-- INTEGRATED_BUTTONS draws the red/yellow/green buttons inside the WezTerm bar
+-- rather than in a macOS title bar. The empty space of that bar acts as the
+-- drag area used to move the window with the mouse.
 config.window_decorations = "INTEGRATED_BUTTONS|RESIZE"
 config.integrated_title_button_style = "MacOsNative"
 
--- Barre en mode "retro" : les onglets y sont dessines comme du texte, sans
--- bouton de fermeture par onglet. C'est ce qui permet de n'avoir aucune trace
--- d'onglet dans la barre tout en gardant les boutons de fenetre.
+-- Bar in "retro" mode: tabs are drawn as plain text, with no per-tab close
+-- button. This is what lets us have no trace of a tab in the bar while still
+-- keeping the window buttons.
 config.use_fancy_tab_bar = false
 
--- La barre reste visible en permanence : c'est elle qui porte les boutons
--- et la zone de glisser. La masquer reviendrait a perdre les deux.
+-- The bar stays visible at all times: it is the one carrying the buttons and
+-- the drag area. Hiding it would mean losing both.
 config.hide_tab_bar_if_only_one_tab = false
 
--- Le bouton "+" disparait : les onglets sont geres par Herdr, pas par WezTerm
+-- The "+" button disappears: tabs are managed by Herdr, not by WezTerm
 config.show_new_tab_button_in_tab_bar = false
 
--- L'onglet lui-meme n'affiche plus rien. Il n'y aura jamais qu'un seul onglet
--- WezTerm (Herdr gere les siens en interne), donc l'afficher n'apporte rien.
--- On ne peut pas simplement supprimer la barre : c'est elle qui porte les
--- boutons rouge/jaune/vert et la zone de glisser. On vide donc son contenu.
+-- The tab itself no longer displays anything. There will never be more than a
+-- single WezTerm tab (Herdr manages its own internally), so displaying it adds
+-- nothing. We cannot simply remove the bar: it is the one carrying the
+-- red/yellow/green buttons and the drag area. So we empty its contents instead.
 wezterm.on("format-tab-title", function()
 	return ""
 end)
 
--- La barre prend exactement la meme couleur ET la meme opacite que le corps
--- du terminal, pour qu'elles soient indiscernables. La couleur vient du theme
--- et l'opacite de la meme constante que la fenetre : les deux ne peuvent donc
--- pas diverger. Peindre la barre a 100% la rendrait plus sombre que le corps.
+-- The bar takes exactly the same color AND the same opacity as the terminal
+-- body, so that the two are indistinguishable. The color comes from the theme
+-- and the opacity from the same constant as the window: the two therefore
+-- cannot drift apart. Painting the bar at 100% would make it darker than the
+-- body.
 local scheme = wezterm.color.get_builtin_schemes()[THEME]
 local hex = scheme.background
 local r = tonumber(hex:sub(2, 3), 16)
 local v = tonumber(hex:sub(4, 5), 16)
 local b = tonumber(hex:sub(6, 7), 16)
-local fond_barre = string.format("rgba(%d,%d,%d,%.3f)", r, v, b, OPACITE)
+local bar_background = string.format("rgba(%d,%d,%d,%.3f)", r, v, b, OPACITY)
 
--- window_frame ne stylise que la barre "fancy". Comme on est passe en mode
--- retro pour supprimer la croix de fermeture, c'est colors.tab_bar qui fait
--- foi : sans ca la barre reste grise par defaut au lieu de suivre le theme.
--- On renseigne les deux pour rester correct si on rebascule un jour.
+-- window_frame only styles the "fancy" bar. Since we switched to retro mode to
+-- get rid of the close cross, colors.tab_bar is what actually counts: without
+-- it the bar stays grey by default instead of following the theme.
+-- We fill in both so as to stay correct if we ever switch back.
 config.window_frame = {
-	active_titlebar_bg = fond_barre,
-	inactive_titlebar_bg = fond_barre,
+	active_titlebar_bg = bar_background,
+	inactive_titlebar_bg = bar_background,
 	font = wezterm.font("Hack Nerd Font"),
 	font_size = 12.0,
 }
 
 config.colors = {
 	tab_bar = {
-		background = fond_barre,
-		active_tab = { bg_color = fond_barre, fg_color = scheme.foreground },
-		inactive_tab = { bg_color = fond_barre, fg_color = scheme.foreground },
-		new_tab = { bg_color = fond_barre, fg_color = scheme.foreground },
+		background = bar_background,
+		active_tab = { bg_color = bar_background, fg_color = scheme.foreground },
+		inactive_tab = { bg_color = bar_background, fg_color = scheme.foreground },
+		new_tab = { bg_color = bar_background, fg_color = scheme.foreground },
 	},
 }
 
--- Herdr et tmux utilisent tous les deux Ctrl-b comme prefixe, soit l'octet 0x02
+-- Herdr and tmux both use Ctrl-b as their prefix, that is the byte 0x02
 local PREFIX = "\x02"
 
--- macOS ne transmet jamais la touche Commande aux applications terminal :
--- ni Herdr ni tmux ne peuvent la voir. Seul WezTerm la recoit. On intercepte
--- donc Cmd+X ici et on renvoie la sequence attendue par le multiplexeur en
--- cours. Les touches d'action different entre les deux, d'ou les deux
--- sequences par raccourci.
--- Aucun repli natif : plus aucun raccourci ne cree d'onglet WezTerm.
+-- macOS never forwards the Command key to terminal applications: neither Herdr
+-- nor tmux can see it. Only WezTerm receives it. So we intercept Cmd+X here and
+-- send back the sequence expected by the multiplexer currently running. The
+-- action keys differ between the two, hence the two sequences per shortcut.
+-- No native fallback: no shortcut creates a WezTerm tab any more.
 local function mux(tmux_seq, herdr_seq)
 	return wezterm.action_callback(function(window, pane)
 		local proc = pane:get_foreground_process_name() or ""
@@ -113,7 +113,7 @@ end
 
 config.keys = {
 	--                                    tmux   herdr
-	-- Onglets (ceux de Herdr, pas ceux de WezTerm)
+	-- Tabs (Herdr's own, not WezTerm's)
 	{ key = "t", mods = "CMD", action = mux("c", "c") },
 	{ key = "w", mods = "CMD", action = mux("&", "X") },
 	{ key = "LeftArrow", mods = "CMD", action = mux("p", "p") },
@@ -128,19 +128,19 @@ config.keys = {
 	{ key = "Enter", mods = "CMD", action = mux("z", "z") },
 	{ key = "w", mods = "CMD|SHIFT", action = mux("x", "x") },
 
-	-- Naviguer entre les panes : tmux attend les fleches, Herdr attend h/j/k/l
+	-- Navigating between panes: tmux expects the arrow keys, Herdr expects h/j/k/l
 	{ key = "LeftArrow", mods = "CMD|ALT", action = mux("\x1b[D", "h") },
 	{ key = "RightArrow", mods = "CMD|ALT", action = mux("\x1b[C", "l") },
 	{ key = "UpArrow", mods = "CMD|ALT", action = mux("\x1b[A", "k") },
 	{ key = "DownArrow", mods = "CMD|ALT", action = mux("\x1b[B", "j") },
 
-	-- Specifiques a Herdr
-	{ key = "g", mods = "CMD", action = mux(nil, "g") }, -- navigateur d'agents
-	{ key = "p", mods = "CMD", action = mux(nil, "w") }, -- selecteur de spaces
-	{ key = "b", mods = "CMD", action = mux(nil, "b") }, -- replier la barre laterale
+	-- Herdr specific
+	{ key = "g", mods = "CMD", action = mux(nil, "g") }, -- agent browser
+	{ key = "p", mods = "CMD", action = mux(nil, "w") }, -- space picker
+	{ key = "b", mods = "CMD", action = mux(nil, "b") }, -- collapse the sidebar
 }
 
--- Cmd+1 a Cmd+9 : aller directement a l'onglet N (identique dans les deux)
+-- Cmd+1 to Cmd+9: jump straight to tab N (identical in both)
 for i = 1, 9 do
 	table.insert(config.keys, {
 		key = tostring(i),
