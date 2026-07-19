@@ -15,6 +15,12 @@ show_agent_labels_on_pane_borders = true
 # Les agents qui reclament votre attention remontent en haut de la colonne.
 agent_panel_sort = "priority"
 
+# La barre d'onglets disparait quand un space n'en a qu'un, et avec elle le
+# bouton "+". C'est ce qui rend le space de statistiques impossible a
+# multiplier : la surveillance le maintient a un seul onglet, donc sa barre
+# n'apparait jamais. Ailleurs, la barre revient des le deuxieme onglet.
+hide_tab_bar_when_single_tab = true
+
 [theme]
 name = "catppuccin"
 # Passer a true pour suivre l'apparence claire/sombre du terminal hote.
