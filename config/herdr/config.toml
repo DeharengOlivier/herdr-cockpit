@@ -15,11 +15,20 @@ show_agent_labels_on_pane_borders = true
 # Les agents qui reclament votre attention remontent en haut de la colonne.
 agent_panel_sort = "priority"
 
-# La barre d'onglets disparait quand un space n'en a qu'un, et avec elle le
-# bouton "+". C'est ce qui rend le space de statistiques impossible a
-# multiplier : la surveillance le maintient a un seul onglet, donc sa barre
-# n'apparait jamais. Ailleurs, la barre revient des le deuxieme onglet.
-hide_tab_bar_when_single_tab = true
+# NE PAS activer hide_tab_bar_when_single_tab ici.
+#
+# Il ferait disparaitre la barre d'onglets et son bouton "+" du space de
+# statistiques, ce qui serait souhaitable, mais il est global : les spaces
+# projets perdraient aussi leur barre tant qu'ils n'ont qu'un onglet.
+#
+# Herdr 0.7 ne sait pas cibler un seul space. La condition est ecrite en dur
+# dans src/ui.rs : `app.hide_tab_bar_when_single_tab && ws.tabs.len() == 1`,
+# ou seul le nombre d'onglets depend du space, jamais son identite. Il n'y a
+# ni section de config par workspace, ni fichier par repertoire, et les tokens
+# de report-metadata n'atteignent que la barre laterale.
+#
+# Le "+" reste donc visible sur le space de statistiques. Il est inoffensif :
+# la surveillance de bootstrap.sh referme en deux secondes tout onglet cree.
 
 [theme]
 name = "catppuccin"

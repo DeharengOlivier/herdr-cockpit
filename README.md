@@ -180,10 +180,14 @@ but the sidebar menu's "close" entry cannot be hidden in Herdr 0.7. The
 watchdog is what catches that case.
 
 The same watchdog keeps the stats space to a single tab, closing any extra one
-within two seconds, since Herdr has no per-space tab lock either. Paired with
-`hide_tab_bar_when_single_tab = true`, that space never shows a tab row at all,
-so its `+` button is not merely disabled but absent. Your project spaces still
-get their tab row back as soon as they hold a second tab. And that
+within two seconds, since Herdr has no per-space tab lock either. Its `+`
+button stays visible, which is a deliberate trade rather than an oversight:
+`hide_tab_bar_when_single_tab` would remove it, but the flag is global. In
+Herdr 0.7 the condition is hard-coded as
+`app.hide_tab_bar_when_single_tab && ws.tabs.len() == 1`, where only the tab
+count depends on the space and never its identity. There is no per-workspace
+config section and no per-directory file, so hiding that button would cost
+every project space its tab row too. And that
 space deliberately points at `~/.config/herdr-cockpit` rather than at this
 repository: the sidebar prints the git branch under a space label, and `main`
 under a stats panel means nothing. The panel is launched by absolute path, so
