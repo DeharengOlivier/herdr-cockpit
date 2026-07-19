@@ -1,0 +1,11 @@
+# Vos spaces reels : noms de clients, de produits, chemins locaux.
+# Le depot ne publie que spaces.conf.example.
+spaces.conf
+
+# Sauvegardes laissees par install.sh
+*.bak-*
+*.cockpit
+
+.DS_Store
+__pycache__/
+*.pyc

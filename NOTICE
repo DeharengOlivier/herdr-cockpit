@@ -1,0 +1,54 @@
+herdr-cockpit
+Copyright (c) 2026 Olivier Dehareng
+Licensed under the MIT License (see LICENSE).
+
+This repository contains configuration files and helper scripts. It does not
+contain, embed, or redistribute any third-party program. Everything it
+configures is installed separately by the user, from the vendor's own source.
+
+
+THIRD-PARTY SOFTWARE THIS PROJECT CONFIGURES
+--------------------------------------------------------------------------
+
+Herdr
+    Terminal workspace manager for AI coding agents.
+    https://herdr.dev  |  https://github.com/ogulcancelik/herdr
+    Dual-licensed: GNU Affero General Public License v3.0 or later
+    (AGPL-3.0-or-later), or a commercial license (hey@herdr.dev).
+
+    NOT redistributed here. install.sh checks that Herdr is present and stops
+    if it is not; the user installs it themselves via Homebrew or herdr.dev.
+
+    Note on the AGPL: this project supplies configuration only. It does not
+    modify, link against, or derive from Herdr's source code, and therefore
+    does not form a work based on Herdr. A configuration file is no more a
+    derivative of the program it configures than a .vimrc is of Vim. Section 13
+    (the network clause) is triggered by conveying a *modified* version of
+    Herdr over a network, which this project does not do. If you fork Herdr
+    itself and expose it to remote users, the AGPL applies to you, not through
+    this repository.
+
+WezTerm
+    GPU-accelerated cross-platform terminal emulator.
+    https://wezterm.org  |  https://github.com/wezterm/wezterm
+    MIT License. NOT redistributed here.
+
+quota-axi
+    Optional. Reports subscription quota usage for AI coding providers.
+    Installed via npm. If absent, the stats panel runs without its quota
+    section and says so.
+
+
+ORIGIN OF THIS CONFIGURATION
+--------------------------------------------------------------------------
+
+The setup reproduced here was inspired by the terminal workflow Kun Chen
+demonstrated on video, notably in the interview published by David Ondrej
+("This L8 engineer reveals his Agentic setup"), which showed Herdr driving a
+sidebar of spaces and agents.
+
+To be explicit about provenance: no source code from Kun Chen was used, copied,
+or consulted. His configuration is not public, and this repository was written
+from scratch by observing the resulting behaviour and then reading the WezTerm
+and Herdr documentation. Any resemblance is convergence on the same tools, not
+shared code. The credit owed is for the idea, and it is gladly given.

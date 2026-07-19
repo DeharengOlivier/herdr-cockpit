@@ -1,0 +1,52 @@
+# herdr-cockpit : configuration Herdr.
+#
+# install.sh remplace @@COCKPIT_PANEL@@ par le chemin reel du panneau avant
+# d'ecrire ce fichier dans ~/.config/herdr/config.toml.
+#
+# Ce fichier ne couvre volontairement qu'une petite partie des options.
+# La reference complete de votre version :   herdr --default-config
+# Valider apres edition :                    herdr config check
+# Recharger sans redemarrer :                herdr server reload-config
+
+[ui]
+# Le nom de l'agent s'affiche sur la bordure de sa pane : utile des que
+# plusieurs agents tournent cote a cote.
+show_agent_labels_on_pane_borders = true
+# Les agents qui reclament votre attention remontent en haut de la colonne.
+agent_panel_sort = "priority"
+
+[theme]
+name = "catppuccin"
+# Passer a true pour suivre l'apparence claire/sombre du terminal hote.
+# Renseigner alors dark_name et light_name (ex. "catppuccin" / "catppuccin-latte").
+auto_switch = false
+
+[session]
+# Reprend les conversations des agents dans leur session native apres un
+# redemarrage du serveur Herdr. Sans cette option, le serveur restaure la
+# disposition des spaces mais les agents repartent de zero.
+#
+# Requiert les integrations officielles, qui seules remontent les references de
+# session :   herdr integration install claude
+#             herdr integration status
+resume_agents_on_restore = true
+
+[keys]
+# Fermeture d'un space desactivee : c'est ce raccourci (Ctrl-b Shift+D) qui
+# supprimait le space de statistiques par accident. Les onglets et les panes
+# restent fermables normalement, seuls les spaces sont proteges.
+#
+# Cela ne couvre pas l'entree "close" du menu de la barre laterale : aucune
+# option de Herdr 0.7 ne permet de la masquer. C'est la surveillance lancee
+# par bootstrap.sh qui rattrape ce cas, en recreant le space en deux secondes.
+close_workspace = ""
+
+# Ctrl-b puis i : panneau de consommation des agents (tokens, cout, quotas)
+# en surimpression. Le meme panneau vit en permanence dans le space "▦ Stats"
+# de la colonne de gauche.
+[[keys.command]]
+key = "prefix+i"
+type = "popup"
+command = "python3 '@@COCKPIT_PANEL@@'"
+width = "88%"
+height = "80%"

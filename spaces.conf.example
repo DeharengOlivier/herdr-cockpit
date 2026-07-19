@@ -1,0 +1,24 @@
+# herdr-cockpit : les spaces recrees a chaque ouverture de WezTerm.
+#
+# Copiez ce fichier en "spaces.conf" (non suivi par git) et adaptez-le.
+#     cp spaces.conf.example spaces.conf
+#
+# Racine commune de vos projets. Optionnelle, mais elle raccourcit les chemins
+# ci-dessous et les noms de projets affiches dans le panneau de statistiques.
+PROJECTS_ROOT=~/dev
+
+# Un space par ligne : le libelle, une TABULATION, puis le chemin.
+#
+#   - Le separateur doit etre une vraie tabulation, pas des espaces : les
+#     libelles comme les chemins peuvent contenir des espaces.
+#   - Un chemin relatif est resolu depuis PROJECTS_ROOT.
+#   - Un chemin absolu (/... ou ~/...) est pris tel quel.
+#   - L'ordre des lignes est l'ordre d'affichage dans la colonne de gauche.
+#   - Un chemin inexistant est signale puis ignore, jamais cree.
+#
+# Le space de statistiques "▦ Stats" est ajoute automatiquement, ne le listez
+# pas ici.
+
+client-acme	clients/acme
+mon-produit	produits/mon-produit
+dotfiles	~/.dotfiles
