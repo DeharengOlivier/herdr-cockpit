@@ -179,6 +179,13 @@ disables the keyboard shortcut, and `confirm_close` is deliberately left on,
 but the sidebar menu's "close" entry cannot be hidden in Herdr 0.7. The
 watchdog is what catches that case.
 
+The same watchdog keeps the stats space to a single tab, closing any extra one
+within two seconds, since Herdr has no per-space tab lock either. And that
+space deliberately points at `~/.config/herdr-cockpit` rather than at this
+repository: the sidebar prints the git branch under a space label, and `main`
+under a stats panel means nothing. The panel is launched by absolute path, so
+its working directory is irrelevant to it.
+
 ## What survives what
 
 Worth knowing, because three different layers are involved.

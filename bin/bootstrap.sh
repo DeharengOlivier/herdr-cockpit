@@ -40,6 +40,11 @@ fi
 PANEL="$COCKPIT_DIR/stats/panel.py"
 SPACES_CONF="${COCKPIT_SPACES_CONF:-$COCKPIT_DIR/spaces.conf}"
 STATS_LABEL="${COCKPIT_STATS_LABEL:-▦ Stats}"
+# Le space de statistiques ne pointe volontairement PAS sur le depot : la barre
+# laterale affiche la branche git sous le libelle d'un space, et "main" sous
+# "▦ Stats" n'a aucun sens. Ce dossier n'est pas un depot, donc rien ne
+# s'affiche. Le panneau est lance par chemin absolu, le cwd ne le concerne pas.
+STATS_CWD="${COCKPIT_STATS_CWD:-$HOME/.config/herdr-cockpit}"
 INTERVAL="${COCKPIT_WATCH_INTERVAL:-2}"
 SESSION="${COCKPIT_SESSION:-default}"
 WATCH_PID_FILE="${COCKPIT_WATCH_PID_FILE:-$HOME/.config/herdr-cockpit/watch.pid}"
@@ -157,14 +162,60 @@ ensure_spaces() {
       env_args[${#env_args[@]}]="--env"
       env_args[${#env_args[@]}]="COCKPIT_PROJECTS_ROOT=$PROJECTS_ROOT"
     fi
+    mkdir -p "$STATS_CWD" 2>/dev/null
     if "$HERDR" workspace create \
-        --cwd "$COCKPIT_DIR" \
+        --cwd "$STATS_CWD" \
         --label "$STATS_LABEL" \
         "${env_args[@]}" \
         --no-focus >/dev/null 2>&1; then
       printf 'space cree : %s\n' "$STATS_LABEL"
     fi
   fi
+}
+
+stats_workspace_id() {
+  "$HERDR" workspace list 2>/dev/null | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for workspace in (data.get("result") or {}).get("workspaces") or []:
+    if workspace.get("label") == sys.argv[1]:
+        print(workspace.get("workspace_id") or "")
+        break
+' "$STATS_LABEL" 2>/dev/null
+}
+
+enforce_single_tab() {
+  # Herdr ne sait pas verrouiller un space sur un seul onglet. On ferme donc
+  # ceux qui apparaissent en trop, en gardant celui du plus petit numero :
+  # c'est celui qui porte le panneau, les suivants sont forcement posterieurs.
+  local ws_id
+  ws_id="$(stats_workspace_id)"
+  [ -z "$ws_id" ] && return 0
+
+  local extra
+  extra="$("$HERDR" tab list --workspace "$ws_id" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+tabs = (data.get("result") or {}).get("tabs") or []
+tabs.sort(key=lambda t: t.get("number") or 0)
+for tab in tabs[1:]:
+    if tab.get("tab_id"):
+        print(tab["tab_id"])
+' 2>/dev/null)"
+
+  [ -z "$extra" ] && return 0
+  local tab_id
+  while IFS= read -r tab_id; do
+    [ -n "$tab_id" ] && "$HERDR" tab close "$tab_id" >/dev/null 2>&1
+  done <<EOF
+$extra
+EOF
 }
 
 watch_loop() {
@@ -180,6 +231,7 @@ watch_loop() {
     # et tournerait indefiniment dans le vide.
     server_is_up || exit 0
     ensure_spaces >/dev/null
+    enforce_single_tab
   done
 }
 
@@ -214,6 +266,7 @@ case "${1:-}" in
     ;;
   --ensure)
     ensure_spaces
+    enforce_single_tab
     ;;
   --list)
     # Verifie la lecture de spaces.conf sans rien creer. Signale les chemins
