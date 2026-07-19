@@ -102,6 +102,40 @@ herdr-cockpit-bootstrap --list
 `spaces.conf` is gitignored, so your client and product names never leave your
 machine. Only `spaces.conf.example` is published.
 
+## Your GitHub profile in the panel
+
+Set `GITHUB_USER` in `spaces.conf` and the installer renders your avatar into
+the top-right corner of the stats panel, next to your name, a clickable profile
+link and your public repo count.
+
+```conf
+GITHUB_USER=your-handle
+```
+
+The avatar is drawn with Unicode upper-half blocks (`▀`), one character
+carrying two pixels through its foreground and background colours, quantised to
+the xterm-256 palette. That means it is ordinary coloured text: it survives
+curses redraws, needs no experimental terminal flag, and works over SSH. A
+12x6 badge costs about thirty colour pairs out of the 32767 a modern terminal
+offers.
+
+`bin/github-badge.py` does all the work once at install time (fetch, PNG
+decode, box downsample, quantise) and writes a small JSON file. The panel only
+draws it, so it stays offline and instant. Regenerate it any time:
+
+```sh
+bin/github-badge.py your-handle          # 12x6, the header height
+bin/github-badge.py your-handle --size 8 # taller, if you widened the header
+```
+
+Press `p` to hide or show the badge, `o` to open the profile in a browser, or
+click the URL. Below 108 columns the avatar is dropped and only the link
+remains; below 74 columns the whole badge goes, so the table never gets
+squeezed. No `GITHUB_USER` means no badge and no mention of one.
+
+The rendering is a real HTTP call to `api.github.com` at install time, and
+nothing else: no token, no authentication, only the public profile endpoint.
+
 ## Keybindings
 
 Herdr's own prefix is `Ctrl-b`. These Cmd shortcuts are translated to it.

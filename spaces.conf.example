@@ -7,6 +7,12 @@
 # ci-dessous et les noms de projets affiches dans le panneau de statistiques.
 PROJECTS_ROOT=~/dev
 
+# Votre identifiant GitHub. Optionnel. S'il est renseigne, install.sh recupere
+# votre avatar et l'affiche en haut a droite du panneau de statistiques, avec
+# votre nom et un lien cliquable vers votre profil. Laissez vide pour rien.
+# Pour le regenerer plus tard :  bin/github-badge.py <pseudo>
+GITHUB_USER=
+
 # Un space par ligne : le libelle, une TABULATION, puis le chemin.
 #
 #   - Le separateur doit etre une vraie tabulation, pas des espaces : les

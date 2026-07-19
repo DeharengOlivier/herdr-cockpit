@@ -75,10 +75,15 @@ read_spaces_conf() {
     case "$line" in
       \#*|"") continue ;;
     esac
-    # Directive de racine, traitee avant les entrees de spaces.
+    # Directives NOM=valeur. Seule PROJECTS_ROOT concerne ce script ; les
+    # autres (GITHUB_USER, lues par install.sh) sont ignorees sans bruit,
+    # pour ne pas avoir a modifier ce fichier a chaque nouvelle directive.
     case "$line" in
       PROJECTS_ROOT=*)
         PROJECTS_ROOT="$(expand_path "${line#PROJECTS_ROOT=}")"
+        continue
+        ;;
+      [A-Z_]*=*)
         continue
         ;;
     esac

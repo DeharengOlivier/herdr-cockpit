@@ -287,6 +287,39 @@ def quotas():
     return out
 
 
+# ---------------------------------------------------------------- badge GitHub
+BADGE_PATH = Path.home() / ".config" / "herdr-cockpit" / "github-badge.json"
+# Les paires 1 a 6 appartiennent au panneau : le badge commence bien au-dessus.
+BADGE_PAIR_BASE = 50
+BADGE_PAIR_MAX = 200
+
+
+def load_badge():
+    """Badge produit par bin/github-badge.py. Absent tant que GITHUB_USER
+    n'est pas renseigne dans spaces.conf, auquel cas le panneau n'en parle pas.
+    """
+    try:
+        with open(BADGE_PATH, encoding="utf-8") as handle:
+            badge = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    return badge if badge.get("cells") else None
+
+
+def open_url(url):
+    opener = "open" if sys.platform == "darwin" else "xdg-open"
+    try:
+        subprocess.run(
+            [opener, url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+        return True
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def human(n):
     for unit, size in (("G", 1e9), ("M", 1e6), ("k", 1e3)):
         if n >= size:
@@ -312,6 +345,9 @@ class Panel:
         self.total_cost, self.total_tokens = 0.0, 0
         self.hitboxes = {}
         self.compact = self.tiny = False
+        self.badge = load_badge()
+        self.badge_pairs = {}   # (avant-plan, arriere-plan) -> numero de paire
+        self.show_badge = True
 
     # -- donnees ---------------------------------------------------------
     def load(self):
@@ -406,6 +442,10 @@ class Panel:
             )
             row += 1
 
+        # Le badge est dessine en dernier sur la zone d'en-tete, dont la moitie
+        # droite est vide. Il ne decale rien : le tableau garde sa place.
+        self.draw_badge(width, row)
+
         top = row + 1
         quota_height = min(len(self.quota_rows) + 2, 12) if self.show_quotas else 0
         self.draw_table(top, height - top - quota_height - 2, width)
@@ -414,10 +454,90 @@ class Panel:
 
         hint = (
             "  1-5 periode  tab vue  s tri  / chercher  entree filtrer  "
-            "echap retirer  c tout effacer  q quotas  r recharger  x quitter"
+            "echap retirer  c effacer  q quotas  r recharger  x quitter"
         )
+        if self.badge:
+            hint += "  p/o profil"
         self.screen.addnstr(height - 1, 0, hint[: width - 1], width - 1, curses.A_DIM)
         self.screen.refresh()
+
+    def badge_pair(self, high, low):
+        """Numero de paire curses pour un couple de couleurs, alloue a la demande.
+
+        Un avatar de 14x7 ne demande qu'une trentaine de paires distinctes, tres
+        loin du plafond du terminal. Le garde-fou couvre le cas d'une image
+        beaucoup plus riche fournie a la main.
+        """
+        pair = self.badge_pairs.get((high, low))
+        if pair is not None:
+            return pair
+        if len(self.badge_pairs) >= BADGE_PAIR_MAX:
+            return None
+        pair = BADGE_PAIR_BASE + len(self.badge_pairs)
+        try:
+            curses.init_pair(pair, high, low)
+        except curses.error:
+            return None
+        self.badge_pairs[(high, low)] = pair
+        return pair
+
+    def draw_badge(self, width, header_rows):
+        """Avatar et profil GitHub, cales en haut a droite de l'en-tete.
+
+        L'URL est ecrite en clair, sans sequence OSC 8 : curses compte les
+        caracteres qu'il ecrit pour suivre le curseur, une sequence d'echappement
+        y decalerait tout l'affichage. C'est WezTerm qui reconnait l'URL et la
+        rend cliquable, et le clic est de toute facon gere ici.
+        """
+        if not self.badge or not self.show_badge:
+            return
+
+        url = self.badge.get("url") or ""
+        columns = self.badge.get("columns") or 0
+        lines = min(self.badge.get("lines") or 0, header_rows)
+
+        # Trop etroit pour l'image : on sauve au moins le lien.
+        if width < 108 or lines < 4:
+            if width >= 74 and url:
+                start = width - len(url) - 2
+                if start > 44:
+                    try:
+                        self.screen.addnstr(0, start, url, len(url), curses.A_DIM)
+                        self.hitboxes[(0, start, start + len(url))] = ("profile", 0)
+                    except curses.error:
+                        pass
+            return
+
+        art_start = width - columns - 2
+        for y in range(lines):
+            for x, cell in enumerate(self.badge["cells"][y]):
+                pair = self.badge_pair(cell[0], cell[1])
+                if pair is None:
+                    continue
+                try:
+                    self.screen.addstr(y, art_start + x, "▀", curses.color_pair(pair))
+                except curses.error:
+                    pass
+
+        texts = [(self.badge.get("name") or "", curses.A_BOLD), (url, curses.A_DIM)]
+        repos = self.badge.get("public_repos")
+        if repos is not None:
+            texts.append((f"{repos} depots publics", curses.A_DIM))
+
+        for offset, (text, attribute) in enumerate(texts):
+            row = offset + 1
+            if row >= lines or not text:
+                continue
+            start = art_start - len(text) - 2
+            # On ne mord jamais sur l'en-tete de gauche, qui porte les totaux.
+            if start < 46:
+                continue
+            try:
+                self.screen.addnstr(row, start, text, len(text), attribute)
+            except curses.error:
+                continue
+            if text == url:
+                self.hitboxes[(row, start, start + len(text))] = ("profile", 0)
 
     def draw_chips(self, row, label, items, active, kind):
         col = 2
@@ -563,6 +683,10 @@ class Panel:
                         return
                     self.selection = index
                     return
+                elif kind == "profile":
+                    url = (self.badge or {}).get("url") or ""
+                    self.flash(f"Ouvert : {url}" if open_url(url) else "Navigateur indisponible")
+                    return
                 self.recompute()
                 return
 
@@ -619,6 +743,11 @@ class Panel:
                 self.recompute()
             elif key in (ord("q"), ord("Q")):
                 self.show_quotas = not self.show_quotas
+            elif key in (ord("p"), ord("P")) and self.badge:
+                self.show_badge = not self.show_badge
+            elif key in (ord("o"), ord("O")) and self.badge:
+                url = self.badge.get("url") or ""
+                self.flash(f"Ouvert : {url}" if open_url(url) else "Navigateur indisponible")
             elif key in (ord("r"), ord("R")):
                 self.flash("Rechargement...")
                 self.load()

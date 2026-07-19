@@ -164,7 +164,31 @@ else
   warn "spaces.conf cree depuis l'exemple. Il contient des chemins fictifs."
 fi
 
-# --- 3. Commandes ----------------------------------------------------------
+# --- 3. Badge GitHub -------------------------------------------------------
+step "Profil GitHub"
+
+GITHUB_USER=""
+if [ -f "$COCKPIT_DIR/spaces.conf" ]; then
+  GITHUB_USER="$(sed -n 's/^GITHUB_USER=[[:space:]]*//p' "$COCKPIT_DIR/spaces.conf" \
+    | head -1 | tr -d '[:space:]')"
+fi
+
+if [ -z "$GITHUB_USER" ]; then
+  warn "Pas de GITHUB_USER dans spaces.conf, donc pas de badge dans le panneau."
+  warn "  Renseignez-le puis relancez ./install.sh pour l'ajouter."
+elif [ "$DRY_RUN" = "1" ]; then
+  printf '    [dry-run] generer le badge GitHub pour %s\n' "$GITHUB_USER"
+else
+  if badge_output="$(python3 "$COCKPIT_DIR/bin/github-badge.py" "$GITHUB_USER" 2>&1)"; then
+    ok "badge genere pour $GITHUB_USER"
+    record generated "$STATE_DIR/github-badge.json" ""
+  else
+    # Jamais bloquant : le panneau fonctionne sans badge.
+    warn "badge non genere : $badge_output"
+  fi
+fi
+
+# --- 4. Commandes ----------------------------------------------------------
 step "Commandes"
 
 run chmod +x "$COCKPIT_DIR/bin/bootstrap.sh" "$COCKPIT_DIR/stats/panel.py"
@@ -177,11 +201,11 @@ case ":$PATH:" in
      warn "  et Herdr utilisent des chemins absolus." ;;
 esac
 
-# --- 4. WezTerm ------------------------------------------------------------
+# --- 5. WezTerm ------------------------------------------------------------
 step "WezTerm"
 link "$COCKPIT_DIR/config/wezterm.lua" "$WEZTERM_CONF" "wezterm.lua"
 
-# --- 5. Herdr --------------------------------------------------------------
+# --- 6. Herdr --------------------------------------------------------------
 step "Herdr"
 
 generate_herdr_conf() {
@@ -236,7 +260,7 @@ if command -v herdr >/dev/null 2>&1 && [ "$DRY_RUN" != "1" ]; then
   fi
 fi
 
-# --- 6. Garde zsh ----------------------------------------------------------
+# --- 7. Garde zsh ----------------------------------------------------------
 step "Shell"
 
 GUARD_LINE="[ -f \"$COCKPIT_DIR/shell/herdr-autostart.zsh\" ] && source \"$COCKPIT_DIR/shell/herdr-autostart.zsh\""
@@ -261,7 +285,7 @@ else
   warn "  $GUARD_LINE"
 fi
 
-# --- 7. Suite --------------------------------------------------------------
+# --- 8. Suite --------------------------------------------------------------
 step "Termine"
 
 if [ "$SPACES_CREATED" = "1" ]; then
