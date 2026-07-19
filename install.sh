@@ -275,9 +275,14 @@ elif confirm "Ajouter le garde HERDR_AUTOSTART a ~/.zshrc ? (sans lui, le space 
   if [ "$DRY_RUN" = "1" ]; then
     printf '    [dry-run] ajouter le garde a %s\n' "$ZSHRC"
   else
+    # Bloc balise : uninstall.sh le retire par ses marqueurs, ce qui marche
+    # meme quand ce ~/.zshrc n'existait pas avant et n'a donc pas de
+    # sauvegarde, et sans jamais toucher au reste du fichier.
     {
-      printf '\n# herdr-cockpit : lance une application directement dans un space.\n'
+      printf '\n# >>> herdr-cockpit >>>\n'
+      printf '# Lance une application directement dans un space.\n'
       printf '%s\n' "$GUARD_LINE"
+      printf '# <<< herdr-cockpit <<<\n'
     } >>"$ZSHRC"
   fi
   record zshrc "$ZSHRC" "$backup"

@@ -77,13 +77,44 @@ printf '%s\n' "$LINES" | while IFS="	" read -r kind target backup; do
 
   case "$kind" in
     zshrc)
-      # On ne retire pas la ligne a la main : on remet la sauvegarde, seule
-      # facon sure d annuler l ajout sans toucher au reste du fichier.
-      if [ -n "${backup:-}" ] && [ -f "$backup" ]; then
-        run cp "$backup" "$target"
-        ok "~/.zshrc restaure"
-      else
-        warn "~/.zshrc : pas de sauvegarde, retirez la ligne herdr-autostart a la main"
+      # On retire notre bloc par ses marqueurs plutot que de restaurer la
+      # sauvegarde : cela marche meme sans sauvegarde (fichier que nous avons
+      # cree nous-memes) et cela preserve tout ce que vous avez ajoute au
+      # fichier depuis l installation. La sauvegarde reste sur le disque.
+      if [ -f "$target" ]; then
+        if [ "$DRY_RUN" = "1" ]; then
+          printf '  [dry-run] retirer le bloc herdr-cockpit de %s\n' "$target"
+        else
+          python3 - "$target" <<'PY'
+import sys
+
+chemin = sys.argv[1]
+with open(chemin, encoding="utf-8", errors="replace") as handle:
+    lignes = handle.readlines()
+
+garde, dans_le_bloc = [], False
+for ligne in lignes:
+    nu = ligne.strip()
+    if nu == "# >>> herdr-cockpit >>>":
+        dans_le_bloc = True
+        continue
+    if nu == "# <<< herdr-cockpit <<<":
+        dans_le_bloc = False
+        continue
+    if not dans_le_bloc:
+        garde.append(ligne)
+
+# On ne laisse pas une ligne vide orpheline la ou etait le bloc.
+while garde and not garde[-1].strip():
+    garde.pop()
+if garde:
+    garde[-1] = garde[-1].rstrip("\n") + "\n"
+
+with open(chemin, "w", encoding="utf-8") as handle:
+    handle.writelines(garde)
+PY
+        fi
+        ok "bloc herdr-cockpit retire de ~/.zshrc"
       fi
       ;;
     link|generated)
