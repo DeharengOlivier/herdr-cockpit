@@ -124,6 +124,24 @@ class Cockpit:
         )
 
 
+def load_script(name: str, path):
+    """Load one of the repository's standalone scripts as a module.
+
+    They are scripts, not an installed package, and one of them has a dash in
+    its file name, so neither is importable by name.
+    """
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="session")
+def badge():
+    """bin/github-badge.py loaded as a module."""
+    return load_script("cockpit_badge", REPOSITORY / "bin" / "github-badge.py")
+
+
 @pytest.fixture(scope="session")
 def panel():
     """stats/panel.py loaded as a module.
@@ -133,11 +151,7 @@ def panel():
     import time is a constant, and the tests that need a different HOME or
     cache location override the module attribute they care about.
     """
-    path = REPOSITORY / "stats" / "panel.py"
-    spec = importlib.util.spec_from_file_location("cockpit_panel", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_script("cockpit_panel", REPOSITORY / "stats" / "panel.py")
 
 
 # --- bootstrap.sh -----------------------------------------------------------
