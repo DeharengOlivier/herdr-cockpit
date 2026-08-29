@@ -1,4 +1,9 @@
-# herdr-cockpit: the spaces recreated every time WezTerm opens.
+# herdr-cockpit: the spaces you want, and where they live.
+#
+# Nothing here is created behind your back. Opening WezTerm creates no space at
+# all; this file is read by "herdr-cockpit-bootstrap --ensure", which you run
+# when you want the missing ones, and by "--list" and "--extra", which only
+# report.
 #
 # Copy this file to "spaces.conf" (not tracked by git) and adapt it.
 #     cp spaces.conf.example spaces.conf

@@ -148,7 +148,9 @@ Herdr's own prefix is `Ctrl-b`. These Cmd shortcuts are translated to it.
 | `Cmd+T` | new tab |
 | `Cmd+W` | close tab |
 | `Cmd+←` / `Cmd+→` | previous / next tab |
+| `Cmd+Shift+[` / `Cmd+Shift+]` | previous / next tab |
 | `Cmd+1..9` | go to tab N |
+| `Cmd+Shift+R` | rename the tab |
 | `Cmd+D` | split vertically |
 | `Cmd+Shift+D` | split horizontally |
 | `Cmd+Opt+←↓↑→` | move between panes |
@@ -188,15 +190,17 @@ guard sourced from your `~/.zshrc`. Without it, Herdr opens a shell first and
 the panel lands in a second, useless pane.
 
 Herdr has no way to protect a space from being closed. `close_workspace = ""`
-disables the keyboard shortcut and `confirm_close` is deliberately left on, but
-the sidebar menu's "close" entry cannot be hidden. Nothing catches that case any
-more, and that is the point: a space you close is a space you meant to close.
+disables the keyboard shortcut, and `new_workspace` and `new_worktree` are
+emptied the same way so that the sidebar button is the only path to creating
+one. The sidebar menu's "close" entry cannot be hidden. Nothing catches that
+case any more, and that is the point: a space you close is a space you meant to
+close.
 
 Nothing keeps the stats space to a single tab either, since Herdr has no
 per-space tab lock. Its `+`
 button stays visible, which is a deliberate trade rather than an oversight:
-`hide_tab_bar_when_single_tab` would remove it, but the flag is global. In
-Herdr 0.7 the condition is hard-coded as
+`hide_tab_bar_when_single_tab` would remove it, but the flag is global. As of
+Herdr 0.8 the condition is hard-coded as
 `app.hide_tab_bar_when_single_tab && ws.tabs.len() == 1`, where only the tab
 count depends on the space and never its identity. There is no per-workspace
 config section and no per-directory file, so hiding that button would cost
@@ -218,8 +222,9 @@ session.
 The layout itself is not lost: Herdr continuously writes spaces, tabs, labels
 and working directories to `~/.config/herdr/session.json`.
 
-**Rebooting** does not restart the server automatically. The bootstrap
-re-creates your spaces on the next launch regardless.
+**Rebooting** does not restart the server automatically, and nothing re-creates
+your spaces on the next launch. Run `herdr-cockpit-bootstrap --ensure` once to
+get them back from `spaces.conf`.
 
 This config sets `resume_agents_on_restore = true`, which resumes agent
 conversations in their native sessions after a server restart. It only works
@@ -261,6 +266,24 @@ That said, a few are worth the look:
 Before reaching for any of them, note that `herdr pane report-metadata` plus
 custom `[ui.sidebar.agents] rows` tokens let you build a bespoke sidebar
 statusline in pure configuration, with no dependency and no risk.
+
+## Working on it
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install pytest ruff
+.venv/bin/python -m pytest      # 142 tests
+.venv/bin/ruff check . && .venv/bin/ruff format --check .
+shellcheck bin/bootstrap.sh install.sh uninstall.sh shell/herdr-autostart.zsh
+```
+
+The suite never touches the machine it runs on. `install.sh` and
+`uninstall.sh` are exercised against a throwaway `HOME` and a copy of the
+repository, with `herdr` and `wezterm` replaced by stubs on `PATH`, so the
+round trip is verified rather than assumed: what was on disk before an install
+is what is on disk after the uninstall. `bootstrap.sh` runs against a stub
+Herdr server that keeps its spaces and tabs in a JSON file, which is what makes
+the negative assertions possible (`--extra` closes nothing, `--ensure` leaves an
+existing space alone). The same three commands run in CI on macOS and Linux.
 
 ## Uninstall
 
