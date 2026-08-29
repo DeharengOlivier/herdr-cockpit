@@ -1,3 +1,8 @@
+# shellcheck shell=bash
+#
+# Checked as bash because shellcheck has no zsh mode at all, and every
+# construct below is common to both shells. Sourced by zsh, never executed.
+#
 # herdr-cockpit: HERDR_AUTOSTART guard.
 #
 # Without this guard, a space that is supposed to start on an application (the
