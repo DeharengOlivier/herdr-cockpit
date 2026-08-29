@@ -37,8 +37,10 @@ intercepts `Cmd+T`, `Cmd+W`, `Cmd+D` and friends, then sends Herdr the prefix
 sequence it expects. It detects whether the foreground process is Herdr or tmux
 and sends the right key for each.
 
-**Your projects, always there.** `spaces.conf` declares them. A watchdog
-re-creates any space you close by accident, within two seconds.
+**Your projects, on request.** `spaces.conf` declares them, `--ensure` creates
+them, and nothing creates them behind your back. A space you close stays
+closed. `--extra` lists whatever has piled up outside the file, `--prune`
+closes it, so the column stays bounded instead of growing forever.
 
 **A cost panel.** An interactive curses TUI over your Claude Code session
 transcripts: tokens and cost by project, model, month or day, with cumulative
@@ -164,23 +166,24 @@ into `bin/`. That script:
 
 1. resolves its own real path through the symlink chain, so the repository can
    be moved without breaking anything;
-2. reads `spaces.conf` and creates any missing space;
-3. forks a watchdog that re-checks every two seconds and exits when the Herdr
-   server does;
-4. `exec`s `herdr session attach default`, rather than plain `herdr`, which
+2. `exec`s `herdr session attach default`, rather than plain `herdr`, which
    would create a new space on every launch.
+
+That is the whole list. Until 2026-08-06 it also provisioned `spaces.conf` and
+forked a watchdog that put back any closed space within two seconds. Both are
+gone: spaces are created on request, by `--ensure` or by hand.
 
 The `▦ Stats` space starts directly on the panel thanks to a `HERDR_AUTOSTART`
 guard sourced from your `~/.zshrc`. Without it, Herdr opens a shell first and
 the panel lands in a second, useless pane.
 
 Herdr has no way to protect a space from being closed. `close_workspace = ""`
-disables the keyboard shortcut, and `confirm_close` is deliberately left on,
-but the sidebar menu's "close" entry cannot be hidden in Herdr 0.7. The
-watchdog is what catches that case.
+disables the keyboard shortcut and `confirm_close` is deliberately left on, but
+the sidebar menu's "close" entry cannot be hidden. Nothing catches that case any
+more, and that is the point: a space you close is a space you meant to close.
 
-The same watchdog keeps the stats space to a single tab, closing any extra one
-within two seconds, since Herdr has no per-space tab lock either. Its `+`
+Nothing keeps the stats space to a single tab either, since Herdr has no
+per-space tab lock. Its `+`
 button stays visible, which is a deliberate trade rather than an oversight:
 `hide_tab_bar_when_single_tab` would remove it, but the flag is global. In
 Herdr 0.7 the condition is hard-coded as

@@ -17,13 +17,16 @@ config.font_size = 15.0
 config.window_background_opacity = OPACITY
 config.macos_window_background_blur = 50
 
--- When WezTerm opens we go through bootstrap.sh, which recreates the missing
--- spaces, starts the watcher that puts them back if they get closed, then
--- attaches the existing session ("session attach default" rather than a plain
--- "herdr", which used to create an extra space on every launch).
+-- When WezTerm opens we go through bootstrap.sh, which since 2026-08-06 does
+-- one single thing: attach the existing session ("session attach default"
+-- rather than a plain "herdr", which used to create an extra space on every
+-- launch). It no longer provisions the spaces of spaces.conf and no longer
+-- starts a watcher. Spaces are created by hand, and a closed space stays closed.
 --
 -- The path goes through the symlink installed by install.sh, never through the
--- repository location: the repo can be moved without breaking WezTerm.
+-- repository location. That protects the config from a repository move only if
+-- the symlink itself is repointed: it broke when the repository moved on
+-- 2026-08-04, and was repaired on 2026-08-06.
 config.default_prog = {
 	"/bin/bash",
 	(os.getenv("HOME") or "") .. "/.local/bin/herdr-cockpit-bootstrap",

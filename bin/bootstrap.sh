@@ -1,16 +1,23 @@
 #!/bin/bash
-# herdr-cockpit: provisions the Herdr spaces, then attaches the session.
+# herdr-cockpit: attaches the Herdr session. Spaces are created by hand.
 #
-#   bootstrap.sh            provision + watch in background + attach the session
-#   bootstrap.sh --ensure   provision only, then hand back control
-#   bootstrap.sh --watch    watch loop (internal use)
+#   bootstrap.sh            attach the session, and nothing else
+#   bootstrap.sh --ensure   create the spaces of spaces.conf, explicit, one shot
+#   bootstrap.sh --watch    watch loop, explicit, never started on its own
+#   bootstrap.sh --list     read spaces.conf without creating anything
+#   bootstrap.sh --extra    list the spaces that are NOT in spaces.conf
+#   bootstrap.sh --prune    close those spaces, to keep the column bounded
 #
 # This is the script WezTerm runs on startup (see config/wezterm.lua).
 #
-# Herdr cannot protect a space against closing: the shortcut can be disabled,
-# but the "close" entry in the sidebar menu cannot be hidden. Watching is
-# therefore the only way to guarantee that a space closed by mistake comes
-# back.
+# Until 2026-08-06 this script provisioned the spaces of spaces.conf at every
+# launch, and started a watcher that put back, within two seconds, any space
+# closed from the sidebar menu. Both are gone. The guarantee is now the
+# opposite one: a space only ever exists because it was asked for, and a space
+# that is closed stays closed.
+#
+# --ensure keeps the provisioning reachable, for setting up a machine from
+# scratch. Nothing calls it on its own. Same for --watch.
 #
 # Compatible with bash 3.2 (the version shipped with macOS): no associative
 # array, no readarray, no ${var,,}.
@@ -173,6 +180,45 @@ ensure_spaces() {
   fi
 }
 
+extra_labels() {
+  # Spaces present on the server without being declared in spaces.conf. This is
+  # the list that grows on its own, so it is the one worth watching. The stats
+  # space is never reported: it belongs to the cockpit even though it does not
+  # appear in the file.
+  local labels label known index
+  labels="$(existing_labels)" || return 0
+  while IFS= read -r label; do
+    [ -z "$label" ] && continue
+    [ "$label" = "$STATS_LABEL" ] && continue
+    known=no
+    index=0
+    while [ "$index" -lt "${#SPACES[@]}" ]; do
+      if [ "${SPACES[$index]%%	*}" = "$label" ]; then
+        known=yes
+        break
+      fi
+      index=$((index + 1))
+    done
+    [ "$known" = no ] && printf '%s\n' "$label"
+  done <<EOF
+$labels
+EOF
+}
+
+workspace_id_for() {
+  "$HERDR" workspace list 2>/dev/null | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for workspace in (data.get("result") or {}).get("workspaces") or []:
+    if workspace.get("label") == sys.argv[1]:
+        print(workspace.get("workspace_id") or "")
+        break
+' "$1" 2>/dev/null
+}
+
 stats_workspace_id() {
   "$HERDR" workspace list 2>/dev/null | python3 -c '
 import json, sys
@@ -261,6 +307,38 @@ fi
 read_spaces_conf
 
 case "${1:-}" in
+  --extra)
+    # Read-only. Answers "which spaces have piled up?" without touching any.
+    count=0
+    while IFS= read -r label; do
+      [ -z "$label" ] && continue
+      count=$((count + 1))
+      printf '  %s\n' "$label"
+    done <<EOF
+$(extra_labels)
+EOF
+    if [ "$count" = 0 ]; then
+      printf 'no space outside spaces.conf\n'
+    else
+      printf '\n%s space(s) outside spaces.conf. Close them with --prune.\n' "$count"
+    fi
+    ;;
+  --prune)
+    # Closes exactly what --extra lists. Two separate commands on purpose: you
+    # look before you close, and closing a space closes its panes with it.
+    while IFS= read -r label; do
+      [ -z "$label" ] && continue
+      ws_id="$(workspace_id_for "$label")"
+      [ -z "$ws_id" ] && continue
+      if "$HERDR" workspace close "$ws_id" >/dev/null 2>&1; then
+        printf 'closed: %s\n' "$label"
+      else
+        printf 'could not close: %s\n' "$label"
+      fi
+    done <<EOF
+$(extra_labels)
+EOF
+    ;;
   --watch)
     watch_loop
     ;;
@@ -288,8 +366,10 @@ case "${1:-}" in
     done
     ;;
   *)
-    ensure_spaces
-    start_watcher
+    # Deliberately bare. Neither ensure_spaces nor start_watcher is called
+    # here: this is the whole point of the change of 2026-08-06. Adding either
+    # one back would make spaces reappear on their own at the next WezTerm
+    # launch, which is exactly what we do not want.
     exec "$HERDR" session attach "$SESSION"
     ;;
 esac

@@ -27,8 +27,10 @@ agent_panel_sort = "priority"
 # per-workspace config section, no per-directory file, and the report-metadata
 # tokens only reach the sidebar.
 #
-# The "+" therefore stays visible on the statistics space. It is harmless: the
-# bootstrap.sh watcher closes any tab that gets created within two seconds.
+# The "+" therefore stays visible on the statistics space. Since 2026-08-06 no
+# watcher closes the extra tabs any more: automatic creation and automatic
+# repair were both removed from bootstrap.sh, spaces and tabs are now entirely
+# manual. Close a stray tab yourself.
 
 [theme]
 name = "catppuccin"
@@ -52,9 +54,27 @@ resume_agents_on_restore = true
 # usual, only the spaces are protected.
 #
 # This does not cover the "close" entry of the sidebar menu: no Herdr 0.7
-# option makes it possible to hide it. It is the watcher started by
-# bootstrap.sh that catches this case, recreating the space within two seconds.
+# option makes it possible to hide it. A space closed from that menu stays
+# closed, which is now the wanted behaviour: nothing recreates it.
 close_workspace = ""
+
+# Creating a space goes through the sidebar button, and through nothing else.
+#
+# Two keyboard paths created one behind that button. Both are closed here:
+#   new_workspace  (prefix+shift+n)  created a space directly.
+#   new_worktree   (prefix+shift+g)  created a Git worktree, which comes with
+#                                    its own linked space.
+#
+# Emptying a binding disables the shortcut without touching the sidebar, which
+# is exactly what is wanted: the button keeps working, the accidental chord
+# does not. This is the same mechanism as close_workspace above, whose sidebar
+# entry did survive being emptied. If the button were ever to disappear, it is
+# one line to put back.
+#
+# What stays reachable, deliberately: `herdr workspace create` on the command
+# line, which is what bootstrap.sh --ensure uses to provision spaces.conf.
+new_workspace = ""
+new_worktree = ""
 
 # Ctrl-b then i: agent consumption panel (tokens, cost, quotas) as an overlay.
 # The same panel lives permanently in the "▦ Stats" space of the left column.
@@ -64,3 +84,30 @@ type = "popup"
 command = "python3 '@@COCKPIT_PANEL@@'"
 width = "88%"
 height = "80%"
+
+# Telling a working agent from an idle one: the mark alone, chosen 2026-08-06.
+#
+# state_text was tried alongside it and dropped: the column is narrow, and the
+# word costs more width than it brings once the marks are known.
+#
+# The uniform green that prompted the whole question was not a display fault.
+# Every agent really was idle, because transcript saving was off and nothing
+# ever ran. One state, one mark. Now that the states move, the marks move.
+#
+# What is NOT adjustable in 0.8.0, checked against the 324-line reference and
+# `herdr --skill`: the glyph of each state, and its colour. Inline styling
+# ({ token = "state_icon", fg = "#89b4fa" }) applies to the token as a whole,
+# identically for every state, so it distinguishes nothing. And 0.8.0 removed
+# the spinner that used to run while agents work, on purpose.
+#
+# The five states, in the words of the bundled documentation:
+#   working  a turn is in progress
+#   idle     ready for input, and the tab has already been seen
+#   done     same underlying state, after background work you have NOT seen
+#   blocked  Herdr recognised an approval or question prompt
+#   unknown  an agent is there but Herdr cannot classify it confidently
+#
+# `done` is the "go and look at this one" signal. With agent_panel_sort set to
+# "priority" above, those rows climb to the top of the column on their own.
+[ui.sidebar.agents]
+rows = [["state_icon", "workspace", "tab"], ["agent"]]
