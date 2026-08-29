@@ -80,6 +80,19 @@ than linked because it holds an absolute path. If you already have one, the
 installer refuses to guess a merge: it writes its version alongside as
 `config.toml.cockpit` and shows you the diff command.
 
+When the cockpit stops behaving, ask it what happened:
+
+```sh
+./install.sh --check
+```
+
+It replays the manifest read-only and names what decayed: a link gone, a link
+replaced by a real file, a link left dangling by a repository that moved, a
+`config.toml` still pointing at a panel that is no longer there, a guard that
+disappeared from `~/.zshrc`. It exits non-zero only for a broken installation;
+a missing guard is reported as a warning, because declining it is a supported
+choice.
+
 ## Declaring your spaces
 
 ```conf

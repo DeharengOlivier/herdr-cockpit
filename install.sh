@@ -5,6 +5,7 @@
 #   ./install.sh --yes        answers yes to everything (non interactive)
 #   ./install.sh --force      overwrites config.toml instead of asking
 #   ./install.sh --dry-run    shows what would be done, writes nothing
+#   ./install.sh --check      reports on an existing installation, writes nothing
 #
 # Principle : nothing is copied, everything is linked. The repository stays the
 # source of truth, so a "git pull" updates the installation without redoing it.
@@ -26,15 +27,22 @@ WEZTERM_CONF="$HOME/.config/wezterm/wezterm.lua"
 HERDR_CONF="$HOME/.config/herdr/config.toml"
 ZSHRC="$HOME/.zshrc"
 
+AUTOSTART_SCRIPT="$COCKPIT_DIR/shell/herdr-autostart.zsh"
+GUARD_LINE="[ -f \"$AUTOSTART_SCRIPT\" ] && source \"$AUTOSTART_SCRIPT\""
+BLOCK_START="# >>> herdr-cockpit >>>"
+BLOCK_END="# <<< herdr-cockpit <<<"
+
 ASSUME_YES=0
 FORCE=0
 DRY_RUN=0
+CHECK_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --yes|-y)  ASSUME_YES=1 ;;
     --force)   FORCE=1 ;;
     --dry-run) DRY_RUN=1 ;;
-    --help|-h) sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --check)   CHECK_ONLY=1 ;;
+    --help|-h) sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) printf 'unknown option : %s\n' "$arg" >&2; exit 2 ;;
   esac
 done
@@ -111,6 +119,142 @@ link() {
     ok "$label linked"
   fi
 }
+
+# --- 0. Checking an existing installation ----------------------------------
+# Everything laid down here can be undone by something else: a clone that moved
+# leaves dangling links, a dotfile manager overwrites ~/.zshrc, a package
+# replaces wezterm.lua with a real file. From the outside all of those look the
+# same, the cockpit simply stops behaving. This says which one happened.
+
+guard_is_present() {
+  [ -f "$1" ] || return 1
+  grep -Fq -e "$BLOCK_START" -e "herdr-autostart.zsh" -e "HERDR_AUTOSTART" "$1"
+}
+
+panel_referenced_by() {
+  # The command the generated config.toml runs for the popup panel. It carries
+  # an absolute path, which is exactly what a moved repository breaks while
+  # `herdr config check` still passes.
+  python3 - "$1" <<'PY'
+import re
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        content = handle.read()
+except OSError:
+    sys.exit(0)
+match = re.search("command = \"python3 '([^']*)'\"", content)
+if match:
+    print(match.group(1))
+PY
+}
+
+check_link() {
+  local target="$1" pointed_at name
+  name="$(basename "$target")"
+  if [ -L "$target" ]; then
+    pointed_at="$(readlink "$target")"
+    if [ ! -e "$target" ]; then
+      err "$name points at $pointed_at, which does not exist (repository moved?)"
+      return 1
+    fi
+    case "$pointed_at" in
+      "$COCKPIT_DIR"/*) ok "$name links into this repository"; return 0 ;;
+      *) err "$name points outside this repository: $pointed_at"; return 1 ;;
+    esac
+  elif [ -e "$target" ]; then
+    err "$name is no longer a link: a real file has taken its place"
+    return 1
+  else
+    err "$name is gone from $(dirname "$target")"
+    return 1
+  fi
+}
+
+check_generated() {
+  local target="$1" name panel
+  name="$(basename "$target")"
+  if [ ! -e "$target" ]; then
+    err "$name is gone from $(dirname "$target")"
+    return 1
+  fi
+  case "$target" in
+    */config.toml)
+      panel="$(panel_referenced_by "$target")"
+      if [ -z "$panel" ]; then
+        err "$name no longer names the cockpit panel"
+        return 1
+      fi
+      if [ ! -e "$panel" ]; then
+        err "$name points at a panel that does not exist: $panel"
+        return 1
+      fi
+      ok "$name names a panel that exists"
+      ;;
+    *) ok "$name present" ;;
+  esac
+  return 0
+}
+
+check_installation() {
+  if [ ! -f "$MANIFEST" ]; then
+    printf 'No manifest: nothing was installed from this repository.\n' >&2
+    printf 'Expected: %s\n' "$MANIFEST" >&2
+    return 1
+  fi
+
+  step "Installation"
+  # The manifest is append-only, so installing twice leaves two lines for the
+  # same target. Only the last one describes the state on disk: reporting the
+  # earlier ones again is noise that hides a real problem further down. awk
+  # keeps the last line per target while preserving the manifest's order.
+  #
+  # zshrc entries are dropped here and the guard is checked once, below: it is
+  # a property of the installation rather than of a manifest line, and
+  # declining the prompt and pasting the line by hand leaves no entry at all.
+  local entries
+  entries="$(awk -F'\t' '
+    $1 != "zshrc" && !($2 in seen) { order[++count] = $2 }
+    $1 != "zshrc" { seen[$2] = $1 }
+    END { for (i = 1; i <= count; i++) print seen[order[i]] "\t" order[i] }
+  ' "$MANIFEST")"
+
+  local problems=0 kind target
+  while IFS="	" read -r kind target; do
+    [ -z "${kind:-}" ] && continue
+    case "$kind" in
+      link)      check_link "$target"      || problems=$((problems + 1)) ;;
+      generated) check_generated "$target" || problems=$((problems + 1)) ;;
+      *) warn "unknown manifest entry, ignored: $kind" ;;
+    esac
+  done <<EOF
+$entries
+EOF
+
+  # Declining the guard is a supported choice, so its absence is reported
+  # without failing the check: the panel still works, it just opens in a
+  # second pane behind a useless shell.
+  if guard_is_present "$ZSHRC"; then
+    ok "autostart guard present in $(basename "$ZSHRC")"
+  else
+    warn "no autostart guard in $ZSHRC: the Stats space will open a shell first"
+  fi
+
+  printf '\n'
+  if [ "$problems" = 0 ]; then
+    printf '  Installation intact, nothing to repair.\n\n'
+    return 0
+  fi
+  printf '  %s problem(s). Run ./install.sh again to lay it back down,\n' "$problems"
+  printf '  or ./uninstall.sh to remove what is left.\n\n'
+  return 1
+}
+
+if [ "$CHECK_ONLY" = "1" ]; then
+  check_installation
+  exit $?
+fi
 
 # --- 1. Dependencies -------------------------------------------------------
 step "Dependencies"
@@ -263,11 +407,6 @@ fi
 # --- 7. zsh guard ----------------------------------------------------------
 step "Shell"
 
-AUTOSTART_SCRIPT="$COCKPIT_DIR/shell/herdr-autostart.zsh"
-GUARD_LINE="[ -f \"$AUTOSTART_SCRIPT\" ] && source \"$AUTOSTART_SCRIPT\""
-BLOCK_START="# >>> herdr-cockpit >>>"
-BLOCK_END="# <<< herdr-cockpit <<<"
-
 # Three shapes count as "already installed", and all three are searched for in
 # the ~/.zshrc itself : our marked block, a source line pasted by hand, and a
 # guard someone inlined around the variable.
@@ -278,8 +417,7 @@ BLOCK_END="# <<< herdr-cockpit <<<"
 # appended a second block, and a second autostart loop behind it. The block is
 # now written from the same BLOCK_START the probe reads, so the two cannot
 # drift apart again.
-if [ -f "$ZSHRC" ] && grep -Fq -e "$BLOCK_START" -e "herdr-autostart.zsh" \
-    -e "HERDR_AUTOSTART" "$ZSHRC"; then
+if guard_is_present "$ZSHRC"; then
   ok "autostart guard already present in ~/.zshrc"
 elif confirm "Add the autostart guard to ~/.zshrc ? (without it, the Stats space opens twice)"; then
   backup="$(backup_copy "$ZSHRC")"
