@@ -87,6 +87,10 @@ SPACES=()          # entries "label<TAB>absolute path"
 expand_path() {
   # Expands ~ and resolves relative paths from PROJECTS_ROOT.
   local raw="$1"
+  # The tildes below are case patterns to recognise, not paths to expand: what
+  # gets printed is built from $HOME. The directive has to sit in front of the
+  # whole case, since shellcheck refuses one on an individual branch.
+  # shellcheck disable=SC2088
   case "$raw" in
     "~")   printf '%s' "$HOME" ;;
     "~/"*) printf '%s' "$HOME/${raw#\~/}" ;;
@@ -136,7 +140,11 @@ read_spaces_conf() {
 }
 
 # --- Talking to the Herdr server -------------------------------------------
-existing_labels() {
+workspace_rows() {
+  # One line per space: "label<TAB>workspace_id". Everything that reads the
+  # server's list of spaces is a projection of this, so the JSON shape is
+  # described in exactly one place and a change to it breaks one function.
+  #
   # Deliberately python3 rather than jq: python3 is already a hard dependency
   # of the panel, jq is not.
   "$HERDR" workspace list 2>/dev/null | python3 -c '
@@ -148,8 +156,13 @@ except Exception:
 for workspace in (data.get("result") or {}).get("workspaces") or []:
     label = workspace.get("label")
     if label:
-        print(label)
+        print("%s\t%s" % (label, workspace.get("workspace_id") or ""))
 ' 2>/dev/null
+}
+
+existing_labels() {
+  # cut splits on a tab by default, which is exactly the separator above.
+  workspace_rows | cut -f1
 }
 
 server_is_up() {
@@ -228,31 +241,16 @@ EOF
 }
 
 workspace_id_for() {
-  "$HERDR" workspace list 2>/dev/null | python3 -c '
-import json, sys
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-for workspace in (data.get("result") or {}).get("workspaces") or []:
-    if workspace.get("label") == sys.argv[1]:
-        print(workspace.get("workspace_id") or "")
-        break
-' "$1" 2>/dev/null
-}
-
-stats_workspace_id() {
-  "$HERDR" workspace list 2>/dev/null | python3 -c '
-import json, sys
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-for workspace in (data.get("result") or {}).get("workspaces") or []:
-    if workspace.get("label") == sys.argv[1]:
-        print(workspace.get("workspace_id") or "")
-        break
-' "$STATS_LABEL" 2>/dev/null
+  # Matching is done here rather than inside the extractor: a label goes
+  # through no quoting on its way to a shell comparison, whereas passing it to
+  # awk -v or to a python argv would have to survive one more layer of escapes.
+  local wanted="$1" row_label row_id
+  workspace_rows | while IFS="	" read -r row_label row_id; do
+    if [ "$row_label" = "$wanted" ]; then
+      printf '%s\n' "$row_id"
+      break
+    fi
+  done
 }
 
 enforce_single_tab() {
@@ -260,7 +258,7 @@ enforce_single_tab() {
   # show up, keeping the one with the smallest number: that is the one holding
   # the panel, the following ones are necessarily later.
   local ws_id
-  ws_id="$(stats_workspace_id)"
+  ws_id="$(workspace_id_for "$STATS_LABEL")"
   [ -z "$ws_id" ] && return 0
 
   local extra
@@ -301,22 +299,6 @@ watch_loop() {
     ensure_spaces >/dev/null
     enforce_single_tab
   done
-}
-
-start_watcher() {
-  # A PID file rather than a pgrep on the script name: that name depends on the
-  # path used to call it (symlink or real file), so the pattern missed a
-  # watcher started another way and started a second one.
-  if [ -f "$WATCH_PID_FILE" ]; then
-    local existing
-    existing="$(cat "$WATCH_PID_FILE" 2>/dev/null)"
-    if [ -n "$existing" ] && kill -0 "$existing" 2>/dev/null; then
-      return 0
-    fi
-    rm -f "$WATCH_PID_FILE"
-  fi
-  nohup "$SELF" --watch >/dev/null 2>&1 &
-  disown 2>/dev/null || true
 }
 
 # --- Entry point -----------------------------------------------------------
@@ -389,10 +371,12 @@ EOF
     done
     ;;
   *)
-    # Deliberately bare. Neither ensure_spaces nor start_watcher is called
-    # here: this is the whole point of the change of 2026-08-06. Adding either
-    # one back would make spaces reappear on their own at the next WezTerm
-    # launch, which is exactly what we do not want.
+    # Deliberately bare. ensure_spaces is not called here, and nothing starts
+    # the watcher: this is the whole point of the change of 2026-08-06. Adding
+    # either one back would make spaces reappear on their own at the next
+    # WezTerm launch, which is exactly what we do not want. The function that
+    # used to spawn the watcher went with it; --watch runs it in the
+    # foreground, which is the only way it is meant to be started.
     exec "$HERDR" session attach "$SESSION"
     ;;
 esac
