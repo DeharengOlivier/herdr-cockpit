@@ -166,12 +166,22 @@ into `bin/`. That script:
 
 1. resolves its own real path through the symlink chain, so the repository can
    be moved without breaking anything;
-2. `exec`s `herdr session attach default`, rather than plain `herdr`, which
+2. unsets every `CLAUDE_CODE_*` variable it inherited, see below;
+3. `exec`s `herdr session attach default`, rather than plain `herdr`, which
    would create a new space on every launch.
 
 That is the whole list. Until 2026-08-06 it also provisioned `spaces.conf` and
 forked a watchdog that put back any closed space within two seconds. Both are
 gone: spaces are created on request, by `--ensure` or by hand.
+
+**Why the variables are unset.** A Herdr server started from inside a Claude
+Code session inherits `CLAUDE_CODE_CHILD_SESSION`, and hands it to every pane
+it opens. A `claude` started in such a pane takes itself for a child session
+and turns transcript saving off, so the conversation is written nowhere and
+dies with the pane. On 2026-08-06, 29 of 30 agent panes were in that state and
+not one of their session references matched a transcript on disk. Scrubbing in
+the bootstrap covers every launch, and stays confined to the Herdr process
+tree.
 
 The `▦ Stats` space starts directly on the panel thanks to a `HERDR_AUTOSTART`
 guard sourced from your `~/.zshrc`. Without it, Herdr opens a shell first and

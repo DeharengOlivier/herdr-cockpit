@@ -44,6 +44,28 @@ if [ -z "$HERDR" ]; then
 fi
 [ -z "$HERDR" ] && HERDR="$HOME/.local/bin/herdr"
 
+# --- Neutralising the Claude Code session markers ---------------------------
+# A Herdr server started from inside a Claude Code session inherits
+# CLAUDE_CODE_CHILD_SESSION, and hands it down to every pane it opens. Any
+# `claude` started in such a pane takes itself for a child session and turns
+# transcript saving off. The conversation is then written nowhere at all, and
+# is lost for good the day the pane dies.
+#
+# This is not a hypothesis. On 2026-08-06, 29 of the 30 agent panes were
+# displaying "Transcript saving is off", and not one of the 30 session
+# references had a matching transcript among the 4005 present on disk. The
+# server had been started from a Claude Code session weeks earlier.
+#
+# Scrubbing here rather than in the shell rc covers every launch whatever
+# WezTerm itself inherited, and stays confined to the Herdr process tree: a
+# `claude` started by hand in a normal terminal keeps its own variables.
+scrub_agent_markers() {
+  local var
+  for var in $(env | sed -n 's/^\(CLAUDE_CODE_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    unset "$var"
+  done
+}
+
 PANEL="$COCKPIT_DIR/stats/panel.py"
 SPACES_CONF="${COCKPIT_SPACES_CONF:-$COCKPIT_DIR/spaces.conf}"
 STATS_LABEL="${COCKPIT_STATS_LABEL:-▦ Stats}"
@@ -305,6 +327,7 @@ if [ ! -x "$HERDR" ]; then
 fi
 
 read_spaces_conf
+scrub_agent_markers
 
 case "${1:-}" in
   --extra)
