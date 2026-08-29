@@ -146,9 +146,7 @@ def test_usage_is_summed_per_day_and_per_model(panel, tmp_path):
 def test_lines_that_are_not_json_are_skipped_rather_than_crashing_the_panel(panel, tmp_path):
     # A transcript being written to can end mid-line.
     session = tmp_path / "session.jsonl"
-    session.write_text(
-        json.dumps(usage_entry(tok_in=100)) + "\n" + '{"usage": broken\n'
-    )
+    session.write_text(json.dumps(usage_entry(tok_in=100)) + "\n" + '{"usage": broken\n')
 
     _, rows = panel.parse_file(session)
 

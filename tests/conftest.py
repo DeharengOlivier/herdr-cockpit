@@ -25,12 +25,27 @@ REPOSITORY = Path(__file__).resolve().parent.parent
 
 # The files install.sh copies. Its own build products (spaces.conf, .venv, the
 # git history) are left out: a copy is a fresh machine, not a used one.
-COPIED = ("bin", "config", "shell", "stats", "install.sh", "uninstall.sh", "spaces.conf.example")
+COPIED = (
+    "bin",
+    "config",
+    "shell",
+    "stats",
+    "install.sh",
+    "uninstall.sh",
+    "spaces.conf.example",
+)
 
 STUBS = {
     # `herdr --version` is parsed with awk for the second field; `herdr config
     # check` decides whether the installer reports the config as valid.
-    "herdr": "#!/bin/sh\ncase \"$1\" in\n  --version) echo 'herdr 0.8.0' ;;\n  config) exit 0 ;;\n  *) exit 0 ;;\nesac\n",
+    "herdr": (
+        "#!/bin/sh\n"
+        'case "$1" in\n'
+        "  --version) echo 'herdr 0.8.0' ;;\n"
+        "  config) exit 0 ;;\n"
+        "  *) exit 0 ;;\n"
+        "esac\n"
+    ),
     "wezterm": "#!/bin/sh\necho 'wezterm 20260101'\n",
 }
 
@@ -119,9 +134,7 @@ class Cockpit:
 
     def tree(self):
         """Every path under HOME, relative and sorted: the state to compare."""
-        return sorted(
-            str(p.relative_to(self.home)) for p in self.home.rglob("*") if not p.is_dir()
-        )
+        return sorted(str(p.relative_to(self.home)) for p in self.home.rglob("*") if not p.is_dir())
 
 
 def load_script(name: str, path):
@@ -159,7 +172,7 @@ def panel():
 # A stand-in for the Herdr server. It keeps its spaces and tabs in a JSON file
 # so a test can set the state up, run bootstrap.sh, and read back both what the
 # state became and every command that was issued to get there.
-HERDR_STUB = '''#!/usr/bin/env python3
+HERDR_STUB = """#!/usr/bin/env python3
 import json, os, pathlib, sys
 
 log = pathlib.Path(os.environ["HERDR_STUB_LOG"])
@@ -211,7 +224,7 @@ elif argv[:1] == ["session"]:
         "\\n".join("%s=%s" % item for item in sorted(os.environ.items()))
     )
 sys.exit(0)
-'''
+"""
 
 
 @pytest.fixture

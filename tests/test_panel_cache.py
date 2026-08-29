@@ -58,8 +58,7 @@ def test_transcripts_are_found_recursively_and_attributed_to_their_project(panel
     ]
 
 
-def test_a_directory_that_does_not_exist_yields_nothing_rather_than_raising(panel, sessions, tmp_path):
-    projects, _ = sessions
+def test_a_missing_projects_directory_yields_nothing_rather_than_raising(panel, sessions, tmp_path):
     panel.PROJECTS_DIR = tmp_path / "never-created"
 
     assert panel.collect() == []
@@ -96,7 +95,7 @@ def test_an_unchanged_file_is_not_parsed_again(panel, sessions):
 
 def test_a_file_whose_size_changed_is_parsed_again(panel, sessions):
     projects, _ = sessions
-    path = transcript(projects, "one.jsonl", "/work/acme", 100)
+    transcript(projects, "one.jsonl", "/work/acme", 100)
     panel.collect()
 
     transcript(projects, "one.jsonl", "/work/acme", 12345)

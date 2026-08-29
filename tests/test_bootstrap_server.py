@@ -78,9 +78,7 @@ def test_a_label_containing_spaces_is_matched_whole(bootstrap):
 
 def test_prune_closes_exactly_what_extra_listed(bootstrap):
     bootstrap.write_conf(conf(f"acme{TAB}/usr"))
-    bootstrap.set_state(
-        workspaces=[workspace("acme"), workspace("scratch"), workspace(STATS)]
-    )
+    bootstrap.set_state(workspaces=[workspace("acme"), workspace("scratch"), workspace(STATS)])
 
     result = bootstrap.run("--prune")
 
@@ -154,7 +152,7 @@ def test_ensure_creates_the_statistics_space_with_its_autostart_command(bootstra
     result = bootstrap.run("--ensure")
 
     assert f"space created: {STATS}" in result.stdout
-    stats = [w for w in bootstrap.read_state()["workspaces"] if w["label"] == STATS][0]
+    stats = next(w for w in bootstrap.read_state()["workspaces"] if w["label"] == STATS)
     autostart = [value for value in stats["env"] if value.startswith("HERDR_AUTOSTART=")]
     assert autostart and autostart[0].endswith("stats/panel.py'")
 
@@ -167,7 +165,7 @@ def test_the_statistics_space_carries_the_projects_root_when_there_is_one(bootst
 
     bootstrap.run("--ensure")
 
-    stats = [w for w in bootstrap.read_state()["workspaces"] if w["label"] == STATS][0]
+    stats = next(w for w in bootstrap.read_state()["workspaces"] if w["label"] == STATS)
     assert f"COCKPIT_PROJECTS_ROOT={bootstrap.root}/dev" in stats["env"]
 
 

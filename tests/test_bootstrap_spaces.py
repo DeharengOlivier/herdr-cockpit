@@ -41,7 +41,7 @@ def test_a_tilde_path_is_expanded_against_home(bootstrap):
 
     result = bootstrap.run("--list")
 
-    assert f"ok       dotfiles" in result.stdout
+    assert "ok       dotfiles" in result.stdout
     assert str(bootstrap.home / ".dotfiles") in result.stdout
 
 

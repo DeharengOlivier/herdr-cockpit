@@ -123,7 +123,8 @@ def test_a_profile_with_no_name_falls_back_to_the_login(badge, monkeypatch):
 
 def test_a_refused_login_exits_non_zero_and_writes_nothing(badge, monkeypatch, tmp_path, capsys):
     destination = tmp_path / "badge.json"
-    monkeypatch.setattr(badge.sys, "argv", ["github-badge.py", "../orgs/x", "--out", str(destination)])
+    argv = ["github-badge.py", "../orgs/x", "--out", str(destination)]
+    monkeypatch.setattr(badge.sys, "argv", argv)
 
     assert badge.main() == 1
     assert not destination.exists()
@@ -132,7 +133,8 @@ def test_a_refused_login_exits_non_zero_and_writes_nothing(badge, monkeypatch, t
 
 def test_a_valid_login_writes_the_badge_where_it_was_asked(badge, github, monkeypatch, tmp_path):
     destination = tmp_path / "nested" / "badge.json"
-    monkeypatch.setattr(badge.sys, "argv", ["github-badge.py", "someone", "--out", str(destination)])
+    argv = ["github-badge.py", "someone", "--out", str(destination)]
+    monkeypatch.setattr(badge.sys, "argv", argv)
 
     assert badge.main() == 0
     assert json.loads(destination.read_text())["login"] == "someone"

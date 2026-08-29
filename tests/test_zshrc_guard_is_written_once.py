@@ -69,8 +69,8 @@ def test_the_second_run_reports_the_guard_as_already_present(cockpit):
 
 def test_a_hand_written_source_line_is_recognised(cockpit):
     # What the installer tells the user to paste when they decline the prompt.
-    guard = f'[ -f "{cockpit.repository}/shell/herdr-autostart.zsh" ] && source "{cockpit.repository}/shell/herdr-autostart.zsh"'
-    cockpit.zshrc.write_text(f"{guard}\n")
+    script = f"{cockpit.repository}/shell/herdr-autostart.zsh"
+    cockpit.zshrc.write_text(f'[ -f "{script}" ] && source "{script}"\n')
 
     cockpit.install()
 

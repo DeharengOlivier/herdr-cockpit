@@ -129,7 +129,7 @@ def parse_file(path):
     rows = defaultdict(lambda: [0, 0, 0, 0, 0])
     cwd = ""
     try:
-        with open(path, "r", errors="replace") as handle:
+        with open(path, errors="replace") as handle:
             for line in handle:
                 if '"usage"' not in line:
                     continue
@@ -158,7 +158,7 @@ def parse_file(path):
                 acc[4] += creation.get("ephemeral_1h_input_tokens") or 0
     except OSError:
         return "", []
-    return cwd, [[date, model] + acc for (date, model), acc in rows.items()]
+    return cwd, [[date, model, *acc] for (date, model), acc in rows.items()]
 
 
 def collect(progress=None):
@@ -256,7 +256,7 @@ def aggregate(records, days, view, filters, sort_key, search):
         acc[5] += w5m + w1h
         total_cost += line_cost
         total_tokens += tokens
-    rows = [[key] + values for key, values in buckets.items()]
+    rows = [[key, *values] for key, values in buckets.items()]
     if sort_key == "cost":
         rows.sort(key=lambda r: r[1], reverse=True)
     elif sort_key == "tokens":
@@ -472,8 +472,11 @@ class Panel:
             if self.search or self.searching:
                 bits.append(f"text='{self.search}'" + ("_" if self.searching else ""))
             self.screen.addnstr(
-                row, 2, ("filters  " + "  ·  ".join(bits))[: width - 3],
-                width - 3, curses.color_pair(3) | curses.A_BOLD,
+                row,
+                2,
+                ("filters  " + "  ·  ".join(bits))[: width - 3],
+                width - 3,
+                curses.color_pair(3) | curses.A_BOLD,
             )
             row += 1
 
@@ -561,8 +564,7 @@ class Panel:
             header = f"  {'':<{name_width}}{'cost':>11}{'tokens':>10}"
         else:
             header = (
-                f"  {'':<{name_width}}{'cost':>11}{'tokens':>10}"
-                f"  {'in':>8}{'out':>8}{'cache':>9}"
+                f"  {'':<{name_width}}{'cost':>11}{'tokens':>10}  {'in':>8}{'out':>8}{'cache':>9}"
             )
         try:
             self.screen.addnstr(top, 0, header[: width - 1], width - 1, curses.A_DIM)
@@ -606,7 +608,10 @@ class Panel:
                 length = int((width - bar_col - 2) * amount / biggest)
                 try:
                     self.screen.addnstr(
-                        row, bar_col, "█" * max(0, length), width - bar_col - 1,
+                        row,
+                        bar_col,
+                        "█" * max(0, length),
+                        width - bar_col - 1,
                         curses.color_pair(2),
                     )
                 except curses.error:
@@ -614,9 +619,7 @@ class Panel:
 
     def draw_quotas(self, top, box_height, width):
         try:
-            self.screen.addnstr(
-                top, 2, "QUOTAS", width - 3, curses.A_BOLD | curses.color_pair(4)
-            )
+            self.screen.addnstr(top, 2, "QUOTAS", width - 3, curses.A_BOLD | curses.color_pair(4))
         except curses.error:
             return
         for offset, (name, plan, label, pct, note) in enumerate(self.quota_rows):
@@ -644,14 +647,18 @@ class Panel:
             )
             try:
                 self.screen.addnstr(
-                    row, 0,
+                    row,
+                    0,
                     f"{head[: head_w - 1]:<{head_w}}{label[: label_w - 1]:<{label_w}}",
                     width - 1,
                 )
                 self.screen.addnstr(row, bar_col, "█" * filled, max(0, width - bar_col - 1), colour)
                 self.screen.addnstr(
-                    row, bar_col + filled, "░" * (width_bar - filled),
-                    max(0, width - bar_col - filled - 1), curses.A_DIM,
+                    row,
+                    bar_col + filled,
+                    "░" * (width_bar - filled),
+                    max(0, width - bar_col - filled - 1),
+                    curses.A_DIM,
                 )
                 tail = f" {pct:5.1f}%"
                 if pct >= 100:

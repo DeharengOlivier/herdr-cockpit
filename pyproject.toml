@@ -1,0 +1,34 @@
+# There is no package here: the repository ships three standalone scripts and
+# their tests. This file exists only to configure the tools, so that a
+# contributor and the CI run exactly the same checks.
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # outdated idioms
+    "B",    # likely bugs
+    "SIM",  # needless complexity
+    "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The panel is a curses program: its interface layer is a long procedural
+# stretch, and splitting it to please a line count would not make it clearer.
+#
+# SIM105: writing near the edge of the screen raises curses.error, and the file
+# guards ten such writes with the same try/except shape. Only three of them
+# swallow the error; the rest break out of a drawing loop. Rewriting those
+# three as contextlib.suppress would leave one guard in two different shapes
+# for no gain in clarity.
+"stats/panel.py" = ["E501", "SIM105"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The scripts are loaded by path, never imported by name.
+addopts = "-q"
