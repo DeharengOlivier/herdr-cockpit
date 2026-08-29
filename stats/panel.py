@@ -192,9 +192,19 @@ def collect(progress=None):
             records.append((row[0], row[1], project, *row[2:]))
     alive = {str(p) for p in files}
     cache = {k: v for k, v in cache.items() if k in alive}
+    # Written to a temporary file in the same directory, then swapped in:
+    # os.replace is atomic there, so a panel killed while saving leaves either
+    # the previous cache or the new one, never a truncated file that the next
+    # start has to throw away and rebuild from scratch. The pid keeps two
+    # panels running side by side from writing to the same temporary name.
     try:
         CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        CACHE_PATH.write_text(json.dumps(cache))
+        pending = CACHE_PATH.with_suffix(f".{os.getpid()}.tmp")
+        try:
+            pending.write_text(json.dumps(cache))
+            os.replace(pending, CACHE_PATH)
+        finally:
+            pending.unlink(missing_ok=True)
     except OSError:
         pass
     return records
