@@ -263,14 +263,25 @@ fi
 # --- 7. zsh guard ----------------------------------------------------------
 step "Shell"
 
-GUARD_LINE="[ -f \"$COCKPIT_DIR/shell/herdr-autostart.zsh\" ] && source \"$COCKPIT_DIR/shell/herdr-autostart.zsh\""
+AUTOSTART_SCRIPT="$COCKPIT_DIR/shell/herdr-autostart.zsh"
+GUARD_LINE="[ -f \"$AUTOSTART_SCRIPT\" ] && source \"$AUTOSTART_SCRIPT\""
+BLOCK_START="# >>> herdr-cockpit >>>"
+BLOCK_END="# <<< herdr-cockpit <<<"
 
-# We look for the variable, not for the file name : a guard written by hand
-# straight into the .zshrc counts just as much, and adding a second one would
-# only duplicate the loop.
-if [ -f "$ZSHRC" ] && grep -Fq "HERDR_AUTOSTART" "$ZSHRC"; then
-  ok "HERDR_AUTOSTART guard already present in ~/.zshrc"
-elif confirm "Add the HERDR_AUTOSTART guard to ~/.zshrc ? (without it, the Stats space opens twice)"; then
+# Three shapes count as "already installed", and all three are searched for in
+# the ~/.zshrc itself : our marked block, a source line pasted by hand, and a
+# guard someone inlined around the variable.
+#
+# Probing for HERDR_AUTOSTART alone used to miss our own block. That variable
+# lives in shell/herdr-autostart.zsh, which the .zshrc only sources, so the
+# probe never matched the line the installer had just written : a second run
+# appended a second block, and a second autostart loop behind it. The block is
+# now written from the same BLOCK_START the probe reads, so the two cannot
+# drift apart again.
+if [ -f "$ZSHRC" ] && grep -Fq -e "$BLOCK_START" -e "herdr-autostart.zsh" \
+    -e "HERDR_AUTOSTART" "$ZSHRC"; then
+  ok "autostart guard already present in ~/.zshrc"
+elif confirm "Add the autostart guard to ~/.zshrc ? (without it, the Stats space opens twice)"; then
   backup="$(backup_copy "$ZSHRC")"
   if [ "$DRY_RUN" = "1" ]; then
     printf '    [dry-run] add the guard to %s\n' "$ZSHRC"
@@ -279,10 +290,10 @@ elif confirm "Add the HERDR_AUTOSTART guard to ~/.zshrc ? (without it, the Stats
     # when this ~/.zshrc did not exist before and therefore has no backup, and
     # without ever touching the rest of the file.
     {
-      printf '\n# >>> herdr-cockpit >>>\n'
+      printf '\n%s\n' "$BLOCK_START"
       printf '# Launches an application straight into a space.\n'
       printf '%s\n' "$GUARD_LINE"
-      printf '# <<< herdr-cockpit <<<\n'
+      printf '%s\n' "$BLOCK_END"
     } >>"$ZSHRC"
   fi
   record zshrc "$ZSHRC" "$backup"
