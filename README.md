@@ -210,6 +210,13 @@ repository: the sidebar prints the git branch under a space label, and `main`
 under a stats panel means nothing. The panel is launched by absolute path, so
 its working directory is irrelevant to it.
 
+**What it costs to read.** The panel parses every transcript under
+`~/.claude/projects` and caches the result per file, keyed on the file's size
+and modification time. Measured on 4514 transcripts totalling 4.8 GB: 12.3 s on
+the very first run, 0.17 s on every refresh after that, for a 1.6 MB cache. The
+refresh runs every 120 s while the panel is open, so what you look at is never
+more than two minutes old.
+
 ## What survives what
 
 Worth knowing, because three different layers are involved.
