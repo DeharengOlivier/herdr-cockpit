@@ -191,3 +191,56 @@ def test_a_save_that_fails_leaves_the_previous_cache_in_place(panel, sessions, m
 
     assert cache.read_text() == intact
     assert list(cache.parent.iterdir()) == [cache], "a temporary file was left behind"
+
+
+# --- the cache is only written when it changed ------------------------------
+
+
+def test_a_refresh_that_changes_nothing_does_not_rewrite_the_cache(panel, sessions):
+    """Measured on the real corpus, 2026-08-29: a 1.61 MB cache rewritten every
+    120 s is 1.16 GB written per day for a set of transcripts that never
+    changed. The panel sits open in the statistics space for days at a time.
+    """
+    projects, cache = sessions
+    transcript(projects, "one.jsonl", "/work/acme", 100)
+    panel.collect()
+    stamp = cache.stat().st_mtime_ns
+
+    panel.collect()
+    panel.collect()
+
+    assert cache.stat().st_mtime_ns == stamp
+
+
+def test_a_new_transcript_does_get_written_to_the_cache(panel, sessions):
+    # The saving must not be so eager that a real change is dropped.
+    projects, cache = sessions
+    transcript(projects, "one.jsonl", "/work/acme", 100)
+    panel.collect()
+
+    transcript(projects, "two.jsonl", "/work/other", 200)
+    panel.collect()
+
+    assert str(projects / "two.jsonl") in json.loads(cache.read_text())
+
+
+def test_a_deleted_transcript_gets_written_out_too(panel, sessions):
+    projects, cache = sessions
+    gone = transcript(projects, "gone.jsonl", "/work/acme", 100)
+    transcript(projects, "kept.jsonl", "/work/acme", 200)
+    panel.collect()
+
+    gone.unlink()
+    panel.collect()
+
+    assert str(gone) not in json.loads(cache.read_text())
+
+
+def test_the_records_are_the_same_whether_or_not_the_cache_was_written(panel, sessions):
+    projects, _ = sessions
+    transcript(projects, "one.jsonl", "/work/acme", 100)
+
+    first = panel.collect()
+    second = panel.collect()
+
+    assert first == second

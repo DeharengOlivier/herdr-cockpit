@@ -169,6 +169,9 @@ def collect(progress=None):
             cache = json.loads(CACHE_PATH.read_text())
         except ValueError:
             cache = {}
+    # What was on disk when this refresh started. The save at the end compares
+    # against it, so a refresh that learned nothing new writes nothing at all.
+    cache_on_disk = dict(cache)
     records = []
     if not PROJECTS_DIR.is_dir():
         return records
@@ -193,6 +196,15 @@ def collect(progress=None):
             records.append((row[0], row[1], project, *row[2:]))
     alive = {str(p) for p in files}
     cache = {k: v for k, v in cache.items() if k in alive}
+
+    # The panel refreshes every REFRESH_SECONDS for as long as the statistics
+    # space stays open, which is days. Saving unconditionally meant rewriting
+    # the whole cache each time: measured at 1.61 MB on 4514 transcripts, that
+    # is 1.16 GB written per day for a set of files that never changed. The
+    # comparison below costs one dict equality and removes all of it.
+    if cache == cache_on_disk:
+        return records
+
     # Written to a temporary file in the same directory, then swapped in:
     # os.replace is atomic there, so a panel killed while saving leaves either
     # the previous cache or the new one, never a truncated file that the next
