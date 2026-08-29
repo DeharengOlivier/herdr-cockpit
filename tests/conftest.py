@@ -11,6 +11,7 @@ wezterm are not installed on a CI runner, and the point of these tests is what
 the installer does to a filesystem, not whether a terminal emulator is present.
 """
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -120,3 +121,19 @@ class Cockpit:
         return sorted(
             str(p.relative_to(self.home)) for p in self.home.rglob("*") if not p.is_dir()
         )
+
+
+@pytest.fixture(scope="session")
+def panel():
+    """stats/panel.py loaded as a module.
+
+    It is a standalone script, not an installed package, so it is loaded by
+    path. Session-scoped because importing it is pure: everything it touches at
+    import time is a constant, and the tests that need a different HOME or
+    cache location override the module attribute they care about.
+    """
+    path = REPOSITORY / "stats" / "panel.py"
+    spec = importlib.util.spec_from_file_location("cockpit_panel", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
