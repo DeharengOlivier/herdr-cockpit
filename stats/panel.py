@@ -36,6 +36,21 @@ CACHE_PATH = (
     / "usage-cache.json"
 )
 
+# Auto-refresh.
+#
+# The panel used to read the sessions once at startup, then block for ever on
+# getch(), which waits for a keystroke with no timeout. In the "▦ Stats" space,
+# opened once and never touched again, it therefore displayed the figures of
+# the day it was started. Measured on 2026-08-06: the usage cache had not been
+# rewritten for 38 hours, while the panel was still on screen.
+#
+# POLL_MS is what turns getch() into a non-blocking wait: it returns -1 after
+# that delay, which gives the loop a chance to notice that a reload is due.
+# One second is short enough to stay instant under the keyboard, and costs
+# nothing since a -1 redraws nothing.
+REFRESH_SECONDS = 120
+POLL_MS = 1000
+
 PERIODS = [
     ("Today", 1),
     ("7 days", 7),
@@ -344,12 +359,19 @@ class Panel:
         self.compact = self.tiny = False
         self.badge = load_badge()
         self.show_badge = True
+        self.last_load = None
 
     # -- data ------------------------------------------------------------
     def load(self):
         self.records = collect(lambda d, t: self.flash(f"Reading sessions...  {d}/{t}"))
         self.quota_rows = quotas()
+        self.last_load = datetime.now()
         self.recompute()
+
+    def due_for_reload(self):
+        if self.last_load is None:
+            return True
+        return (datetime.now() - self.last_load).total_seconds() >= REFRESH_SECONDS
 
     def recompute(self):
         self.rows, self.total_cost, self.total_tokens = aggregate(
@@ -412,7 +434,12 @@ class Panel:
         self.compact = width < 92
         self.tiny = width < 62
 
-        title = "  AGENT SPEND"
+        # The reading time goes in the title. A panel that stops refreshing then
+        # says so by itself, instead of showing figures that look current. The
+        # badge relies on len(title) through `occupied`, so it follows along on
+        # its own.
+        stamp = self.last_load.strftime("%H:%M") if self.last_load else "--:--"
+        title = f"  AGENT SPEND    read at {stamp}"
         totals = (
             f"  {PERIODS[self.period][0]}   ${self.total_cost:,.2f}   "
             f"{human(self.total_tokens)} tokens   ({len(self.rows)} rows)"
@@ -665,14 +692,28 @@ class Panel:
 
     def run(self):
         self.load()
+        # Non-blocking wait: this single line is what makes the periodic reload
+        # below reachable at all.
+        self.screen.timeout(POLL_MS)
+        self.draw()
         while True:
-            self.draw()
             try:
                 key = self.screen.getch()
             except KeyboardInterrupt:
                 return
+            if key == -1:
+                # No key within POLL_MS. Nothing is redrawn unless the data
+                # actually gets re-read, so an idle panel costs nothing.
+                # Searching is left alone: reloading resets the scroll, which
+                # would move the ground under a search in progress.
+                if self.searching or not self.due_for_reload():
+                    continue
+                self.load()
+                self.draw()
+                continue
             if self.searching:
                 self.handle_search(key)
+                self.draw()
                 continue
             if key in (ord("x"), ord("X")):
                 return
@@ -718,6 +759,10 @@ class Panel:
                     self.click(y, x)
                 except curses.error:
                     pass
+            # Drawing happens here, once per handled key, rather than at the
+            # top of the loop: at the top it would repaint on every -1, that is
+            # once a second for nothing.
+            self.draw()
 
 
 def main(screen):
