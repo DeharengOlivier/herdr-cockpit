@@ -291,7 +291,7 @@ statusline in pure configuration, with no dependency and no risk.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install pytest ruff
-.venv/bin/python -m pytest      # 154 tests
+.venv/bin/python -m pytest      # 174 tests
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 shellcheck bin/bootstrap.sh install.sh uninstall.sh shell/herdr-autostart.zsh
 ```
