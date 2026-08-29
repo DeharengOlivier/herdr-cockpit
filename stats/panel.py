@@ -8,6 +8,7 @@ Keyboard and mouse navigation. Run: python3 panel.py
 import curses
 import json
 import os
+import shutil
 import subprocess
 import sys
 from collections import defaultdict
@@ -266,12 +267,52 @@ def aggregate(records, days, view, filters, sort_key, search):
     return rows, total_cost, total_tokens
 
 
+# Bounded like every other outbound call: a wedged quota-axi must cost the
+# section, never the panel.
+QUOTA_TIMEOUT_SECONDS = 25
+# The note is drawn on one row next to the name, so it is truncated here rather
+# than by the renderer, which would cut it without saying so.
+QUOTA_NOTE_WIDTH = 70
+
+
+def quota_problem(reason):
+    """The row shown when quota-axi is installed but did not answer usefully."""
+    return ("quota-axi", "", "failed", None, reason[:QUOTA_NOTE_WIDTH])
+
+
+def first_line(result):
+    """First non-blank line of a finished process, stderr before stdout."""
+    for stream in (result.stderr, result.stdout):
+        for line in (stream or "").splitlines():
+            if line.strip():
+                return line.strip()
+    return ""
+
+
+def quota_binary():
+    """Path to quota-axi, or None if it is not installed.
+
+    PATH first, because npm's global prefix is /opt/homebrew or /usr/local as
+    often as it is the home directory, and install.sh reports quota-axi as
+    present from anywhere on PATH. Looking only under ~ made the panel disagree
+    with the installer that had just confirmed it.
+
+    ~/.local/bin second, because a Herdr pane does not necessarily inherit a
+    PATH that includes it, which install.sh warns about.
+    """
+    found = shutil.which("quota-axi")
+    if found:
+        return found
+    fallback = Path.home() / ".local" / "bin" / "quota-axi"
+    return str(fallback) if fallback.exists() else None
+
+
 def quotas():
     # quota-axi is an optional dependency: the panel works without it, it only
     # loses the subscription quota section. We say so instead of making the
     # section silently disappear.
-    binary = Path.home() / ".local" / "bin" / "quota-axi"
-    if not binary.exists():
+    binary = quota_binary()
+    if binary is None:
         return [
             (
                 "quota-axi",
@@ -283,14 +324,22 @@ def quotas():
         ]
     try:
         result = subprocess.run(
-            [str(binary), "--json", "--provider", "claude,codex,cursor,copilot,grok"],
+            [binary, "--json", "--provider", "claude,codex,cursor,copilot,grok"],
             capture_output=True,
             text=True,
-            timeout=25,
+            timeout=QUOTA_TIMEOUT_SECONDS,
         )
+    except subprocess.TimeoutExpired:
+        return [quota_problem(f"no answer after {QUOTA_TIMEOUT_SECONDS}s")]
+    except OSError as error:
+        return [quota_problem(str(error))]
+    try:
         data = json.loads(result.stdout)
-    except (subprocess.TimeoutExpired, ValueError, OSError):
-        return []
+    except ValueError:
+        # Installed but not answering usefully: a wrong node version, a missing
+        # module, a crash. Same principle as the missing case above, the row
+        # says why rather than leaving an empty section behind.
+        return [quota_problem(first_line(result) or f"exit status {result.returncode}")]
     out = []
     for provider in data.get("providers") or []:
         name = provider.get("label") or provider.get("provider") or "?"
