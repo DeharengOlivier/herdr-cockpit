@@ -271,7 +271,7 @@ statusline in pure configuration, with no dependency and no risk.
 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install pytest ruff
-.venv/bin/python -m pytest      # 142 tests
+.venv/bin/python -m pytest      # 154 tests
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 shellcheck bin/bootstrap.sh install.sh uninstall.sh shell/herdr-autostart.zsh
 ```
@@ -283,7 +283,9 @@ round trip is verified rather than assumed: what was on disk before an install
 is what is on disk after the uninstall. `bootstrap.sh` runs against a stub
 Herdr server that keeps its spaces and tabs in a JSON file, which is what makes
 the negative assertions possible (`--extra` closes nothing, `--ensure` leaves an
-existing space alone). The same three commands run in CI on macOS and Linux.
+existing space alone). The panel is started for real on a pseudo-terminal, so a
+crash on startup cannot slip past a suite of pure-function tests. The same
+three commands run in CI on macOS and Linux.
 
 ## Uninstall
 
