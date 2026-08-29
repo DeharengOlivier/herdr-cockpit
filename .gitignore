@@ -1,10 +1,15 @@
-# Vos spaces reels : noms de clients, de produits, chemins locaux.
-# Le depot ne publie que spaces.conf.example.
+# Your real spaces: client names, product names, local paths.
+# The repository only ever publishes spaces.conf.example.
 spaces.conf
 
-# Sauvegardes laissees par install.sh
+# Backups left behind by install.sh, and the sidecar it writes when it declines
+# to overwrite an existing config.toml.
 *.bak-*
 *.cockpit
+
+# Local test environment.
+.venv/
+.pytest_cache/
 
 .DS_Store
 __pycache__/
