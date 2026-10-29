@@ -173,6 +173,59 @@ Herdr's own prefix is `Ctrl-b`. These Cmd shortcuts are translated to it.
 | `Cmd+G` | agent browser |
 | `Cmd+P` | space picker |
 | `Ctrl-b` then `i` | cost panel overlay |
+| `Cmd+Shift+L` | the LOCAL page |
+| `Cmd+Shift+V` | the remote machine page |
+
+## Two machines, two pages
+
+Herdr 0.9 can show Local and saved SSH machines in a single sidebar with
+`herdr machine add`. This config takes the other road: one page per machine.
+The whole window is one machine, its name is in the bar, and you switch by
+clicking the name or with `Cmd+Shift+L` and `Cmd+Shift+V`. The sidebar is
+already the busiest column on screen; merging two machines into it makes what
+you are looking for harder to find, not easier.
+
+The pages are WezTerm tabs, which is what makes them clickable. Herdr manages
+its own tabs internally, so a WezTerm tab is never a tab in the usual sense
+here: there is one per machine and never any other.
+
+**Neither page can go away.** WezTerm closes a tab the instant its program
+exits, and both programs exit for ordinary reasons: `Ctrl-b d` detaches Herdr,
+and an SSH connection dies whenever the remote machine sleeps or the network
+changes. Measured on 2026-09-16, that is exactly what had happened: the remote
+page was gone and a nameless tab sat in the window, invisible because an empty
+title draws nothing in the bar. Two guards now hold the invariant:
+
+- each page runs its program inside a loop that restarts it, so the pane stays
+  open in between and says what happened, and the tab never closes by itself.
+  `set -m` in that loop is not decoration: without job control the program
+  would run in the shell's process group, the terminal's foreground group
+  would stay `bash`, and every `Cmd` shortcut below would go silent;
+- about once a second the window checks that every page has its tab, and
+  recreates the missing one, with a cooldown so an unreachable host cannot
+  cause a spawn loop.
+
+Nothing is ever closed on your behalf. A tab that is not a page, and the macOS
+menu bar can still open one with Shell > New Tab, is given the name `extra`
+rather than killed: an unnamed tab draws nothing and would be a page you can
+neither see nor click.
+
+Declare the remote machine in `~/.config/herdr-cockpit/remote.conf`, next to
+the install manifest. It stays out of the repository on purpose, the way
+`spaces.conf` does: a hostname is not public.
+
+```
+HOST=workbox
+LABEL=VPS
+```
+
+`HOST` is anything your SSH config understands, since Herdr hands it straight
+to OpenSSH. `LABEL` names the page. With no such file there is no remote page
+and `Cmd+Shift+V` is simply not bound, rather than bound to nothing.
+
+The remote page runs `herdr --remote <host>`, which needs Herdr installed on
+that machine. Its panes keep running there when you close the page, the laptop,
+or the lid.
 
 ## How it works
 

@@ -110,4 +110,8 @@ height = "80%"
 # `done` is the "go and look at this one" signal. With agent_panel_sort set to
 # "priority" above, those rows climb to the top of the column on their own.
 [ui.sidebar.agents]
-rows = [["state_icon", "workspace", "tab"], ["agent"]]
+# `machine` is added on purpose. Herdr only inserts that token into the
+# default rows when several machines are connected; a customised row like
+# this one is preserved as written, so a remote agent and a local one would
+# otherwise look identical in the column.
+rows = [["state_icon", "machine", "workspace", "tab"], ["agent"]]
