@@ -16,6 +16,7 @@ import pty
 import subprocess
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,13 @@ STARTUP_BUDGET_SECONDS = 20
 
 @pytest.fixture
 def transcripts(tmp_path):
-    """A HOME holding a couple of sessions for the panel to read."""
+    """A HOME holding a couple of sessions for the panel to read.
+
+    The dates are relative to today: the panel opens on the last 30 days, so
+    fixed dates silently fall out of the window and the test starts failing
+    a month after it was written.
+    """
+    today = datetime.now(timezone.utc)
     home = tmp_path / "home"
     sessions = home / ".claude" / "projects" / "acme"
     sessions.mkdir(parents=True)
@@ -34,7 +41,7 @@ def transcripts(tmp_path):
         "".join(
             json.dumps(
                 {
-                    "timestamp": f"2026-08-0{day}T10:00:00Z",
+                    "timestamp": (today - timedelta(days=day)).strftime("%Y-%m-%dT10:00:00Z"),
                     "cwd": str(home / "dev" / "acme"),
                     "message": {
                         "model": "claude-sonnet-5",
@@ -43,7 +50,7 @@ def transcripts(tmp_path):
                 }
             )
             + "\n"
-            for day in (1, 2, 3)
+            for day in (0, 1, 2)
         )
     )
     return home
